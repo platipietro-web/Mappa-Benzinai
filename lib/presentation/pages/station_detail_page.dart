@@ -9,8 +9,7 @@ import 'package:mappa_prezzi_benzina/domain/repositories/repositories.dart';
 // Mappa colori e icone per tipo carburante
 const _fuelMeta = {
   'Benzina':        {'color': 0xFF4CAF50, 'icon': Icons.local_gas_station},
-  'Benzina Super':  {'color': 0xFF388E3C, 'icon': Icons.local_gas_station},
-  'Benzina 100':    {'color': 0xFF1B5E20, 'icon': Icons.local_gas_station},
+  'Benzina Speciale 100': {'color': 0xFF388E3C, 'icon': Icons.local_gas_station},
   'Diesel':         {'color': 0xFF2196F3, 'icon': Icons.local_gas_station},
   'Diesel+':        {'color': 0xFF1976D2, 'icon': Icons.local_gas_station},
   'Diesel HVO':     {'color': 0xFF0D47A1, 'icon': Icons.eco},
@@ -42,7 +41,7 @@ IconData _fuelIcon(String fuelType) {
 
 // Ordine di visualizzazione preferito
 const _fuelOrder = [
-  'Benzina', 'Benzina Super', 'Benzina 100',
+  'Benzina', 'Benzina Speciale 100',
   'Diesel', 'Diesel+', 'Diesel HVO', 'HVO',
   'GPL', 'Metano', 'GNC', 'GNL', 'Idrogeno',
 ];

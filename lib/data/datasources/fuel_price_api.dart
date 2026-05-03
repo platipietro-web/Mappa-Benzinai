@@ -5,6 +5,29 @@ import 'package:mappa_prezzi_benzina/core/constants/app_constants.dart';
 import 'package:mappa_prezzi_benzina/data/models/gas_station_model.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/user_location.dart';
 
+// ─── Nomi canonici carburanti ──────────────────────────────────────────────────
+// Questi sono gli UNICI nomi usati in tutta l'app (parser, filtri, dettaglio).
+// Modificare qui si propaga ovunque.
+class FuelTypes {
+  static const benzina            = 'Benzina';
+  static const benzinaSp100       = 'Benzina Speciale 100';
+  static const diesel             = 'Diesel';
+  static const dieselPlus         = 'Diesel+';
+  static const dieselHvo          = 'Diesel HVO';
+  static const hvo                = 'HVO';
+  static const gpl                = 'GPL';
+  static const metano             = 'Metano';
+  static const gnc                = 'GNC';
+  static const gnl                = 'GNL';
+  static const idrogeno           = 'Idrogeno';
+
+  static const all = [
+    benzina, benzinaSp100,
+    diesel, dieselPlus, dieselHvo, hvo,
+    gpl, metano, gnc, gnl, idrogeno,
+  ];
+}
+
 abstract class FuelPriceApi {
   Future<List<GasStationModel>> getNearbyStations(
     UserLocation location,
@@ -15,7 +38,6 @@ abstract class FuelPriceApi {
 class FuelPriceApiImpl implements FuelPriceApi {
   final Dio _dio;
 
-  // Cache in-memory: i CSV MIMIT pesano ~10 MB, scaricati una volta sola
   List<GasStationModel>? _cachedStations;
   DateTime? _lastCacheUpdate;
 
@@ -50,11 +72,8 @@ class FuelPriceApiImpl implements FuelPriceApi {
             .compareTo(b.getDistanceFromCoordinates(
                 location.latitude, location.longitude)));
 
-      logInfo(
-          'Found ${nearby.length} stations within ${radiusKm}km of '
-          '${location.latitude},${location.longitude}');
+      logInfo('Found ${nearby.length} stations within ${radiusKm}km');
 
-      // Fallback OpenStreetMap se MIMIT non ha stazioni nella zona
       if (nearby.isEmpty) {
         logInfo('No MIMIT stations found, falling back to OpenStreetMap');
         return _getOpenStreetMapStations(location, radiusKm);
@@ -115,7 +134,6 @@ class FuelPriceApiImpl implements FuelPriceApi {
 
   // ─── CSV Parsing ───────────────────────────────────────────────────────────
 
-  /// Ritorna mappa: idImpianto -> { 'Benzina': 1.799, 'Diesel': 1.699, ... }
   Map<String, Map<String, double>> _parsePricesCsv(String csv) {
     final records = _parseCsv(csv);
     final result = <String, Map<String, double>>{};
@@ -124,7 +142,7 @@ class FuelPriceApiImpl implements FuelPriceApi {
       final id = r['idImpianto'] ?? r['idimpianto'] ?? '';
       final fuelRaw = r['descCarburante'] ?? r['Descrizione Carburante'] ?? '';
       final priceRaw = r['prezzo'] ?? r['Prezzo'] ?? '';
-      final isSelfRaw = (_clean(r['isSelf'])).toLowerCase();
+      final isSelfRaw = _clean(r['isSelf']).toLowerCase();
 
       if (id.isEmpty) continue;
       final fuelType = _normalizeFuelType(fuelRaw);
@@ -135,7 +153,6 @@ class FuelPriceApiImpl implements FuelPriceApi {
       final stationPrices = result.putIfAbsent(id, () => {});
       final existing = stationPrices[fuelType];
 
-      // Preferisci il prezzo self-service; se uguale, prendi il minore
       final isSelf = isSelfRaw == '1' || isSelfRaw == 'true';
       final existingIsSelf =
           existing != null && stationPrices['${fuelType}_isSelf'] == 1.0;
@@ -148,7 +165,6 @@ class FuelPriceApiImpl implements FuelPriceApi {
       }
     }
 
-    // Rimuovi le chiavi _isSelf dai prezzi finali (erano solo helper)
     for (final prices in result.values) {
       prices.removeWhere((key, _) => key.endsWith('_isSelf'));
     }
@@ -170,19 +186,16 @@ class FuelPriceApiImpl implements FuelPriceApi {
       final lat = _parseDouble(r['Latitudine']);
       final lon = _parseDouble(r['Longitudine']);
       if (lat == null || lon == null) continue;
-      // Coordinate di default o nulle → salta
       if (lat == 0.0 && lon == 0.0) continue;
-      // Bounding box Italia
       if (lat < 35.0 || lat > 48.0 || lon < 6.0 || lon > 19.0) continue;
 
       final prices = pricesByStation[id];
-      // Includi solo stazioni che hanno almeno un prezzo
       if (prices == null || prices.isEmpty) continue;
 
-      final brand = _clean(r['Bandiera']);
-      final nome = _clean(r['Nome Impianto'] ?? r['NomeImpianto']);
-      final gestore = _clean(r['Gestore']);
-      final tipo = _clean(r['Tipo Impianto'] ?? r['TipoImpianto']);
+      final brand   = _clean(r['Bandiera']);
+      final nome    = _clean(r['Nome Impianto'] ?? r['NomeImpianto'] ?? '');
+      final gestore = _clean(r['Gestore'] ?? '');
+      final tipo    = _clean(r['Tipo Impianto'] ?? r['TipoImpianto'] ?? '');
 
       final displayName = nome.isNotEmpty
           ? nome
@@ -193,9 +206,9 @@ class FuelPriceApiImpl implements FuelPriceApi {
                   : 'Distributore';
 
       final address = [
-        _clean(r['Indirizzo']),
-        _clean(r['Comune']),
-        '(${_clean(r['Provincia'])})',
+        _clean(r['Indirizzo'] ?? ''),
+        _clean(r['Comune'] ?? ''),
+        '(${_clean(r['Provincia'] ?? '')})',
       ].where((p) => p.isNotEmpty && p != '()').join(' ');
 
       stations.add(GasStationModel(
@@ -209,12 +222,83 @@ class FuelPriceApiImpl implements FuelPriceApi {
         prices: prices,
         brand: brand.isNotEmpty ? brand : null,
         lastUpdated: DateTime.now(),
-        // tipo impianto: stradale, autostradale, etc.
         openingHours: tipo.isNotEmpty ? tipo : null,
       ));
     }
 
     return stations;
+  }
+
+  // ─── Normalizzazione tipo carburante ───────────────────────────────────────
+  //
+  // REGOLA: un solo nome per categoria → corrisponde 1:1 con FuelTypes e filtri
+  //
+  // Benzina base    → "Benzina"
+  // Tutto il resto con benzina (V-Power, 100 ottani, Supreme, Racing...)
+  //                 → "Benzina Speciale 100"
+  //
+  // Diesel base     → "Diesel"
+  // Diesel premium  → "Diesel+"
+  // Diesel HVO      → "Diesel HVO"
+  // HVO puro        → "HVO"
+  //
+  String? _normalizeFuelType(String raw) {
+    final cleaned = _clean(raw);
+    if (cleaned.isEmpty) return null;
+    final n = cleaned.toLowerCase();
+
+    // ── Benzina ────────────────────────────────────────────────────────────
+    if (n.contains('benzina')) {
+      // Tutto ciò che non è benzina base standard è "Benzina Speciale 100"
+      final isSpecial =
+          n.contains('100')       ||
+          n.contains('super')     ||
+          n.contains('premium')   ||
+          n.contains('special')   ||
+          n.contains('speciale')  ||
+          n.contains('v-power')   ||
+          n.contains('vpower')    ||
+          n.contains('ultimate')  ||
+          n.contains('excellium') ||
+          n.contains('supreme')   ||
+          n.contains('racing')    ||
+          n.contains('hi')        ||  // hi-octane, hi-perf
+          n.contains('plus');
+      return isSpecial ? FuelTypes.benzinaSp100 : FuelTypes.benzina;
+    }
+
+    // ── Diesel ─────────────────────────────────────────────────────────────
+    if (n.contains('gasolio') || n.contains('diesel')) {
+      if (n.contains('hvo'))                          return FuelTypes.dieselHvo;
+      if (n.contains('plus')     ||
+          n.contains('+')        ||
+          n.contains('premium')  ||
+          n.contains('excellium')||
+          n.contains('v-power')  ||
+          n.contains('ultimate') ||
+          n.contains('supreme')  ||
+          n.contains('blu')      ||
+          n.contains('special')  ||
+          n.contains('speciale')) return FuelTypes.dieselPlus;
+      return FuelTypes.diesel;
+    }
+
+    // ── HVO puro ───────────────────────────────────────────────────────────
+    if (n.contains('hvo'))                            return FuelTypes.hvo;
+
+    // ── Gas ────────────────────────────────────────────────────────────────
+    if (n.contains('gpl'))                            return FuelTypes.gpl;
+    if (n.contains('gnc') || n.contains('l-gnc'))    return FuelTypes.gnc;
+    if (n.contains('gnl'))                            return FuelTypes.gnl;
+    if (n.contains('metano'))                         return FuelTypes.metano;
+
+    // ── Idrogeno ───────────────────────────────────────────────────────────
+    if (n.contains('idrogeno') ||
+        n.contains('hydrogen') ||
+        n.contains('h2'))                             return FuelTypes.idrogeno;
+
+    // Ignora carburanti sconosciuti invece di creare nomi liberi
+    return null;
   }
 
   // ─── CSV Utilities ─────────────────────────────────────────────────────────
@@ -228,7 +312,6 @@ class FuelPriceApiImpl implements FuelPriceApi {
 
     if (lines.isEmpty) return const [];
 
-    // Cerca header: deve contenere 'idImpianto' e un separatore
     final headerIdx = lines.indexWhere((l) =>
         l.toLowerCase().contains('idimpianto') &&
         (l.contains('|') || l.contains(';')));
@@ -281,51 +364,6 @@ class FuelPriceApiImpl implements FuelPriceApi {
     return double.tryParse(_clean(v).replaceAll(',', '.'));
   }
 
-  String? _normalizeFuelType(String raw) {
-    final cleaned = _clean(raw);
-    if (cleaned.isEmpty) return null;
-    final n = cleaned.toLowerCase();
-
-    // Benzina — mantieni distinzione 95/100/super/speciale
-    if (n.contains('benzina')) {
-      if (n.contains('100') || n.contains('v-power') || n.contains('ultimate') ||
-          n.contains('excellium') || n.contains('racing')) return 'Benzina 100';
-      if (n.contains('super') || n.contains('premium')) return 'Benzina Super';
-      if (n.contains('special') || n.contains('speciale')) return 'Benzina Speciale';
-      return 'Benzina';
-    }
-
-    // Diesel — mantieni distinzione plus/HVO/speciale
-    if (n.contains('gasolio') || n.contains('diesel')) {
-      if (n.contains('hvo')) return 'Diesel HVO';
-      if (n.contains('plus') || n.contains('+') || n.contains('premium') ||
-          n.contains('excellium') || n.contains('v-power') ||
-          n.contains('ultimate') || n.contains('blu')) return 'Diesel+';
-      if (n.contains('special') || n.contains('speciale')) return 'Diesel Speciale';
-      return 'Diesel';
-    }
-
-    // HVO puro (senza gasolio nel nome)
-    if (n.contains('hvo')) return 'HVO';
-
-    // Gas
-    if (n.contains('gpl')) return 'GPL';
-    if (n.contains('gnc') || n.contains('l-gnc')) return 'GNC';
-    if (n.contains('gnl')) return 'GNL';
-    if (n.contains('metano')) return 'Metano';
-
-    // Idrogeno
-    if (n.contains('idrogeno') || n.contains('hydrogen') || n.contains('h2')) {
-      return 'Idrogeno';
-    }
-
-    // Altri carburanti speciali: mantieni nome originale capitalizzato
-    return cleaned
-        .split(' ')
-        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}')
-        .join(' ');
-  }
-
   // ─── OpenStreetMap Fallback ────────────────────────────────────────────────
 
   Future<List<GasStationModel>> _getOpenStreetMapStations(
@@ -359,18 +397,18 @@ out center tags 100;
 
     for (final el in elements) {
       if (el is! Map<String, dynamic>) continue;
-      final tags = (el['tags'] as Map<String, dynamic>?) ?? {};
+      final tags   = (el['tags']   as Map<String, dynamic>?) ?? {};
       final center = (el['center'] as Map<String, dynamic>?) ?? {};
 
       final lat = _asDouble(el['lat'] ?? center['lat']);
       final lon = _asDouble(el['lon'] ?? center['lon']);
       if (lat == null || lon == null) continue;
 
-      final brand = _clean(tags['brand']?.toString());
-      final name = _clean(tags['name']?.toString());
+      final brand     = _clean(tags['brand']?.toString());
+      final name      = _clean(tags['name']?.toString());
       final operator0 = _clean(tags['operator']?.toString());
-      final displayName = [name, brand, operator0, 'Distributore']
-          .firstWhere((s) => s.isNotEmpty);
+      final displayName =
+          [name, brand, operator0, 'Distributore'].firstWhere((s) => s.isNotEmpty);
 
       final address = [
         tags['addr:street'],

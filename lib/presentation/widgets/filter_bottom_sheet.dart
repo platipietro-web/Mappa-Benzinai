@@ -28,13 +28,13 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
   // Tutti i tipi carburante con colore e icona
   static const _fuelTypes = [
     _FuelChip('Benzina',          Color(0xFF4CAF50), Icons.local_gas_station),
-    _FuelChip('Benzina Super',    Color(0xFF388E3C), Icons.local_gas_station),
-    _FuelChip('Benzina 100',      Color(0xFF1B5E20), Icons.local_gas_station),
-    _FuelChip('Benzina Speciale', Color(0xFF2E7D32), Icons.local_gas_station),
+    _FuelChip('Benzina Speciale 100', Color(0xFF388E3C), Icons.local_gas_station),
+    
+    
     _FuelChip('Diesel',           Color(0xFF2196F3), Icons.local_gas_station),
     _FuelChip('Diesel+',          Color(0xFF1976D2), Icons.local_gas_station),
     _FuelChip('Diesel HVO',       Color(0xFF0D47A1), Icons.eco),
-    _FuelChip('Diesel Speciale',  Color(0xFF1565C0), Icons.local_gas_station),
+    
     _FuelChip('HVO',              Color(0xFF00796B), Icons.eco),
     _FuelChip('GPL',              Color(0xFFFF9800), Icons.bubble_chart),
     _FuelChip('Metano',           Color(0xFF9C27B0), Icons.air),
