@@ -1,0 +1,1 @@
+ /Users/pietro/Desktop/App\ test/MappaPrezziBenzina/build/61969ac4fb37058deb4297dad637504b/dart_build_result.json:  /Users/pietro/Desktop/App\ test/MappaPrezziBenzina/.dart_tool/package_config.json /Users/pietro/Desktop/App\ test/MappaPrezziBenzina/pubspec.yaml /Users/pietro/flutter/bin/cache/dart-sdk/version
