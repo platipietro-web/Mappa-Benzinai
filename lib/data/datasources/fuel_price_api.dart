@@ -83,7 +83,7 @@ class FuelPriceApiImpl implements FuelPriceApi {
         return _getOpenStreetMapStations(location, radiusKm);
       }
 
-      return nearby.take(100).toList();
+      return nearby;
     } on DioException catch (e) {
       logError('Network error fetching MIMIT data, fallback OSM', e);
       return _getOpenStreetMapStations(location, radiusKm);

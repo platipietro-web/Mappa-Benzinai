@@ -34,8 +34,6 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
     _FuelChip('Diesel',           Color(0xFF2196F3), Icons.local_gas_station),
     _FuelChip('Diesel+',          Color(0xFF1976D2), Icons.local_gas_station),
     _FuelChip('Diesel HVO',       Color(0xFF0D47A1), Icons.eco),
-    
-    _FuelChip('HVO',              Color(0xFF00796B), Icons.eco),
     _FuelChip('GPL',              Color(0xFFFF9800), Icons.bubble_chart),
     _FuelChip('Metano',           Color(0xFF9C27B0), Icons.air),
     _FuelChip('GNC',              Color(0xFF7B1FA2), Icons.air),

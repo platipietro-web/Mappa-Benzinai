@@ -131,12 +131,18 @@ class MapBloc extends Bloc<MapBlocEvent, MapState> {
         _stationsMap[station.id] = station;
       }
 
-      // Limita a 500 stazioni totali per non appesantire la mappa
-      // Mantieni le più recenti se supera il limite
-      if (_stationsMap.length > 500) {
-        final keys = _stationsMap.keys.toList();
-        for (var i = 0; i < _stationsMap.length - 500; i++) {
-          _stationsMap.remove(keys[i]);
+      // Limita a 2000 stazioni totali rimuovendo quelle più lontane dal centro corrente
+      if (_stationsMap.length > 2000) {
+        final center = event.location;
+        final sorted = _stationsMap.values.toList()
+          ..sort((a, b) => a
+              .getDistanceFromCoordinates(center.latitude, center.longitude)
+              .compareTo(b.getDistanceFromCoordinates(
+                  center.latitude, center.longitude)));
+        // Tieni le 2000 più vicine
+        _stationsMap.clear();
+        for (final s in sorted.take(2000)) {
+          _stationsMap[s.id] = s;
         }
       }
 

@@ -12,10 +12,9 @@ import 'package:mappa_prezzi_benzina/presentation/bloc/location_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
 import 'package:mappa_prezzi_benzina/presentation/widgets/station_card.dart';
 import 'package:mappa_prezzi_benzina/presentation/widgets/filter_bottom_sheet.dart';
+import 'package:mappa_prezzi_benzina/core/services/geocoding_service.dart';
 
 const _kDesktopBreakpoint = 768.0;
-// Altezza approssimativa di una StationCard nella lista (per calcolo scroll)
-const _kCardHeight = 160.0;
 const _kCardSpacing = 10.0;
 
 class MapPage extends StatefulWidget {
@@ -34,8 +33,15 @@ class _MapPageState extends State<MapPage> {
   String _sortBy = 'distance';
 
   Timer? _refreshTimer;
-  Timer? _mapMoveDebounce;
   LatLng? _lastLoadedCenter;
+
+  final Map<String, GlobalKey> _stationKeys = {};
+
+  bool _searchActive = false;
+  final TextEditingController _searchController = TextEditingController();
+  List<GeocodingResult> _searchResults = [];
+  Timer? _searchDebounce;
+  bool _searchLoading = false;
 
   @override
   void initState() {
@@ -69,12 +75,8 @@ class _MapPageState extends State<MapPage> {
     }
   }
 
-  void _loadStationsAtCenter(LatLng center) {
-    if (_lastLoadedCenter != null) {
-      final dist =
-          const Distance().as(LengthUnit.Kilometer, _lastLoadedCenter!, center);
-      if (dist < 1.0) return;
-    }
+  void _searchThisArea() {
+    final center = _mapController.camera.center;
     _lastLoadedCenter = center;
     context.read<MapBloc>().add(LoadNearbyStationsEvent(
           location: UserLocation(
@@ -84,18 +86,6 @@ class _MapPageState extends State<MapPage> {
           ),
           radiusKm: _getVisibleRadiusKm(),
         ));
-  }
-
-  void _onMapEvent(dynamic event) {
-    if (event is MapEventMoveEnd ||
-        event is MapEventScrollWheelZoom ||
-        event is MapEventDoubleTapZoom ||
-        event is MapEventFlingAnimationEnd) {
-      _mapMoveDebounce?.cancel();
-      _mapMoveDebounce = Timer(const Duration(milliseconds: 600), () {
-        _loadStationsAtCenter(_mapController.camera.center);
-      });
-    }
   }
 
   /// Click sul marker della mappa:
@@ -111,14 +101,14 @@ class _MapPageState extends State<MapPage> {
       _mapController.camera.zoom,
     );
 
-    // Scrolla lista alla card corrispondente
-    final index = filteredStations.indexWhere((s) => s.id == station.id);
-    if (index >= 0 && _listScrollController.hasClients) {
-      final offset = index * (_kCardHeight + _kCardSpacing);
-      _listScrollController.animateTo(
-        offset,
-        duration: const Duration(milliseconds: 400),
+    // Scrolla la lista esattamente sulla card, indipendentemente dall'altezza
+    final key = _stationKeys[station.id];
+    if (key?.currentContext != null) {
+      Scrollable.ensureVisible(
+        key!.currentContext!,
+        duration: const Duration(milliseconds: 350),
         curve: Curves.easeInOut,
+        alignment: 0.1,
       );
     }
   }
@@ -155,41 +145,62 @@ class _MapPageState extends State<MapPage> {
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
-      body: BlocListener<LocationBloc, LocationState>(
-        listener: (context, state) {
-          if (state is LocationLoaded) {
-            _lastLoadedCenter =
-                LatLng(state.location.latitude, state.location.longitude);
-            _loadNearbyStations(state.location);
-          } else if (state is LocationPermissionDenied) {
-            _showLocationDeniedDialog();
-          } else if (state is LocationServiceDisabled) {
-            _showLocationDisabledDialog();
-          } else if (state is LocationError) {
-            _showErrorSnackbar(state.message);
-          }
-        },
-        child: BlocBuilder<MapBloc, MapState>(
-          builder: (context, state) {
-            if (state is MapInitial ||
-                (state is MapLoading && _lastLoadedCenter == null)) {
-              return _buildSplash();
-            }
-            if (state is MapError && _lastLoadedCenter == null) {
-              return _buildError(state.message);
-            }
-            final loaded = state is MapLoaded
-                ? state
-                : MapLoaded(
-                    stations: (state as MapLoading).stations,
-                    userLocation: state.userLocation,
-                    selectedStation: state.selectedStation,
-                  );
-            return isDesktop
-                ? _buildDesktopLayout(loaded)
-                : _buildMobileLayout(loaded);
-          },
-        ),
+      body: Stack(
+        children: [
+          BlocListener<LocationBloc, LocationState>(
+            listener: (context, state) {
+              if (state is LocationLoaded) {
+                _lastLoadedCenter =
+                    LatLng(state.location.latitude, state.location.longitude);
+                _loadNearbyStations(state.location);
+              } else if (state is LocationPermissionDenied) {
+                _showLocationDeniedDialog();
+              } else if (state is LocationServiceDisabled) {
+                _showLocationDisabledDialog();
+              } else if (state is LocationError) {
+                _showErrorSnackbar(state.message);
+              }
+            },
+            child: BlocBuilder<MapBloc, MapState>(
+              builder: (context, state) {
+                if (state is MapInitial ||
+                    (state is MapLoading && _lastLoadedCenter == null)) {
+                  return _buildSplash();
+                }
+                if (state is MapError && _lastLoadedCenter == null) {
+                  return _buildError(state.message);
+                }
+                final loaded = state is MapLoaded
+                    ? state
+                    : MapLoaded(
+                        stations: (state as MapLoading).stations,
+                        userLocation: state.userLocation,
+                        selectedStation: state.selectedStation,
+                      );
+                return isDesktop
+                    ? _buildDesktopLayout(loaded)
+                    : _buildMobileLayout(loaded);
+              },
+            ),
+          ),
+          if (_searchActive) ...[
+            Positioned.fill(
+              top: 56,
+              child: GestureDetector(
+                onTap: _deactivateSearch,
+                behavior: HitTestBehavior.opaque,
+                child: const SizedBox.expand(),
+              ),
+            ),
+            if (_searchResults.isNotEmpty || _searchLoading)
+              Positioned(
+                top: 60,
+                left: 8,
+                right: 8,
+                child: _buildSearchResults(),
+              ),
+          ],
+        ],
       ),
     );
   }
@@ -327,14 +338,16 @@ class _MapPageState extends State<MapPage> {
                                 final station = stations[index];
                                 final isSelected =
                                     state.selectedStation?.id == station.id;
+                                final key = _stationKeys.putIfAbsent(
+                                    station.id, () => GlobalKey());
                                 return Padding(
+                                  key: key,
                                   padding: const EdgeInsets.only(
                                       bottom: _kCardSpacing),
                                   child: _DesktopStationCard(
                                     station: station,
                                     userLocation: state.userLocation,
                                     isSelected: isSelected,
-                                    // Click card → dettaglio full screen
                                     onTap: () =>
                                         _onCardTap(context, station, state),
                                   ),
@@ -351,13 +364,12 @@ class _MapPageState extends State<MapPage> {
                 child: Stack(
                   children: [
                     _buildMap(state, stations),
-                    if (state is MapLoading)
-                      Positioned(
-                        top: 12,
-                        left: 0,
-                        right: 0,
-                        child: Center(child: _buildLoadingOverlay()),
-                      ),
+                    Positioned(
+                      top: 12,
+                      left: 0,
+                      right: 0,
+                      child: Center(child: _buildSearchAreaButton()),
+                    ),
                   ],
                 ),
               ),
@@ -383,13 +395,12 @@ class _MapPageState extends State<MapPage> {
                 bottom: 260,
                 child: _buildMap(state, stations),
               ),
-              if (state is MapLoading)
-                Positioned(
-                  top: 12,
-                  left: 0,
-                  right: 0,
-                  child: Center(child: _buildLoadingOverlay()),
-                ),
+              Positioned(
+                top: 12,
+                left: 0,
+                right: 0,
+                child: Center(child: _buildSearchAreaButton()),
+              ),
               Positioned(
                 left: 0,
                 right: 0,
@@ -413,61 +424,254 @@ class _MapPageState extends State<MapPage> {
         border: Border(bottom: BorderSide(color: AppTheme.borderColor)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              color: AppTheme.primaryColor,
-              borderRadius: BorderRadius.circular(8),
+      child: _searchActive
+          ? _buildSearchField()
+          : Row(
+              children: [
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Image.asset(
+                    'assets/icons/logo.png',
+                    width: 18,
+                    height: 18,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  AppConstants.appName,
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimaryColor,
+                  ),
+                ),
+                const Spacer(),
+                if (count > 0)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppTheme.secondaryColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                          color: AppTheme.secondaryColor.withOpacity(0.3)),
+                    ),
+                    child: Text(
+                      '$count trovati',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.secondaryColor,
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: 4),
+                _iconBtn(Icons.search_rounded, 'Cerca zona', _activateSearch),
+                _iconBtn(Icons.tune_rounded, 'Filtri', _showFilterBottomSheet),
+                _iconBtn(Icons.refresh_rounded, 'Aggiorna', () {
+                  context.read<MapBloc>().add(const RefreshStationsEvent());
+                }),
+                if (state.userLocation != null)
+                  _iconBtn(Icons.my_location_rounded, 'La mia posizione', () {
+                    final loc = state.userLocation!;
+                    _mapController.move(
+                        LatLng(loc.latitude, loc.longitude), 14);
+                  }),
+              ],
             ),
-            child: Image.asset(
-              'assets/icons/logo.png',
-              width: 18,
-              height: 18,
-              fit: BoxFit.contain,
-            ), 
+    );
+  }
+
+  // ─── Ricerca zona ───────────────────────────────────────────────────────────
+
+  void _activateSearch() {
+    setState(() {
+      _searchActive = true;
+      _searchResults = [];
+      _searchLoading = false;
+    });
+  }
+
+  void _deactivateSearch() {
+    _searchDebounce?.cancel();
+    _searchController.clear();
+    setState(() {
+      _searchActive = false;
+      _searchResults = [];
+      _searchLoading = false;
+    });
+  }
+
+  void _onSearchChanged(String query) {
+    _searchDebounce?.cancel();
+    if (query.trim().length < 2) {
+      setState(() {
+        _searchResults = [];
+        _searchLoading = false;
+      });
+      return;
+    }
+    setState(() => _searchLoading = true);
+    _searchDebounce = Timer(const Duration(milliseconds: 400), () async {
+      final results = await GeocodingService.search(query);
+      if (mounted) {
+        setState(() {
+          _searchResults = results;
+          _searchLoading = false;
+        });
+      }
+    });
+  }
+
+  void _onResultSelected(GeocodingResult result) {
+    _deactivateSearch();
+    final target = LatLng(result.lat, result.lon);
+    _lastLoadedCenter = target;
+    try {
+      _mapController.move(target, 13.0);
+    } catch (_) {}
+    context.read<MapBloc>().add(LoadNearbyStationsEvent(
+          location: UserLocation(
+            latitude: result.lat,
+            longitude: result.lon,
+            timestamp: DateTime.now(),
           ),
-          const SizedBox(width: 10),
-          Text(
-            AppConstants.appName,
+          radiusKm: 15.0,
+        ));
+  }
+
+  Widget _buildSearchField() {
+    return Row(
+      children: [
+        const Icon(Icons.search_rounded,
+            size: 20, color: AppTheme.textSecondaryColor),
+        const SizedBox(width: 8),
+        Expanded(
+          child: TextField(
+            controller: _searchController,
+            autofocus: true,
+            onChanged: _onSearchChanged,
+            onSubmitted: (v) {
+              if (_searchResults.isNotEmpty) {
+                _onResultSelected(_searchResults.first);
+              }
+            },
+            decoration: InputDecoration(
+              hintText: 'Cerca una zona...',
+              hintStyle: GoogleFonts.poppins(
+                  fontSize: 14, color: AppTheme.textSecondaryColor),
+              border: InputBorder.none,
+              isDense: true,
+              contentPadding: EdgeInsets.zero,
+            ),
             style: GoogleFonts.poppins(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimaryColor,
+                fontSize: 14, color: AppTheme.textPrimaryColor),
+            textInputAction: TextInputAction.search,
+          ),
+        ),
+        const SizedBox(width: 8),
+        if (_searchLoading)
+          const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+        else if (_searchController.text.isNotEmpty)
+          GestureDetector(
+            onTap: () {
+              _searchController.clear();
+              setState(() {
+                _searchResults = [];
+                _searchLoading = false;
+              });
+            },
+            child: const Icon(Icons.clear_rounded,
+                size: 18, color: AppTheme.textSecondaryColor),
+          ),
+        const SizedBox(width: 12),
+        GestureDetector(
+          onTap: _deactivateSearch,
+          child: Text(
+            'Annulla',
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.primaryColor,
             ),
           ),
-          const Spacer(),
-          if (count > 0)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-              decoration: BoxDecoration(
-                color: AppTheme.secondaryColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-                border:
-                    Border.all(color: AppTheme.secondaryColor.withOpacity(0.3)),
-              ),
-              child: Text(
-                '$count trovati',
-                style: GoogleFonts.poppins(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.secondaryColor,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSearchResults() {
+    return Material(
+      elevation: 8,
+      borderRadius: BorderRadius.circular(12),
+      color: AppTheme.surfaceColor,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_searchLoading && _searchResults.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               ),
+            ..._searchResults.map(_buildResultTile),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResultTile(GeocodingResult result) {
+    return InkWell(
+      onTap: () => _onResultSelected(result),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+        child: Row(
+          children: [
+            const Icon(Icons.location_on_outlined,
+                size: 20, color: AppTheme.primaryColor),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    result.name,
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: AppTheme.textPrimaryColor,
+                    ),
+                  ),
+                  if (result.subtitle.isNotEmpty)
+                    Text(
+                      result.subtitle,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: AppTheme.textSecondaryColor,
+                      ),
+                    ),
+                ],
+              ),
             ),
-          const SizedBox(width: 4),
-          _iconBtn(Icons.tune_rounded, 'Filtri', _showFilterBottomSheet),
-          _iconBtn(Icons.refresh_rounded, 'Aggiorna', () {
-            context.read<MapBloc>().add(const RefreshStationsEvent());
-          }),
-          if (state.userLocation != null)
-            _iconBtn(Icons.my_location_rounded, 'La mia posizione', () {
-              final loc = state.userLocation!;
-              _mapController.move(LatLng(loc.latitude, loc.longitude), 14);
-            }),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -502,7 +706,6 @@ class _MapPageState extends State<MapPage> {
           initialZoom: userLocation != null ? 13 : AppConstants.defaultZoom,
           maxZoom: 18,
           minZoom: 5,
-          onMapEvent: _onMapEvent,
         ),
         children: [
           TileLayer(
@@ -684,37 +887,46 @@ class _MapPageState extends State<MapPage> {
     );
   }
 
-  Widget _buildLoadingOverlay() {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceColor,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(
-            width: 13,
-            height: 13,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-          const SizedBox(width: 8),
-          Text('Caricamento stazioni...',
-              style: GoogleFonts.poppins(
-                  fontSize: 12, color: AppTheme.textPrimaryColor)),
-        ],
+  Widget _buildSearchAreaButton() {
+    return GestureDetector(
+      onTap: _searchThisArea,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceColor,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 8),
+          ],
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.search_rounded, size: 15, color: AppTheme.primaryColor),
+            const SizedBox(width: 6),
+            Text('Cerca in questa zona',
+                style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.primaryColor)),
+          ],
+        ),
       ),
     );
   }
 
+  // 'Diesel HVO' nel filtro copre anche stazioni con prezzo 'HVO' puro
+  static List<String> _expandFuelTypes(List<String> selected) => [
+        for (final ft in selected)
+          ...({'Diesel HVO': ['Diesel HVO', 'HVO']}[ft] ?? [ft]),
+      ];
+
   List<GasStation> _filterAndSortStations(List<GasStation> stations) {
+    final effectiveTypes = _expandFuelTypes(_selectedFuelTypes);
+
     final filtered = stations.where((s) {
       final fuelMatch = s.prices.isEmpty ||
-          _selectedFuelTypes.any((ft) => s.prices.containsKey(ft));
+          effectiveTypes.any((ft) => s.prices.containsKey(ft));
       final brandMatch = _selectedBrands.isEmpty ||
           (s.brand != null && _selectedBrands.contains(s.brand));
       return fuelMatch && brandMatch;
@@ -723,8 +935,8 @@ class _MapPageState extends State<MapPage> {
     switch (_sortBy) {
       case 'price':
         filtered.sort((a, b) {
-          final pa = _relevantPrice(a, _selectedFuelTypes);
-          final pb = _relevantPrice(b, _selectedFuelTypes);
+          final pa = _relevantPrice(a, effectiveTypes);
+          final pb = _relevantPrice(b, effectiveTypes);
           return pa.compareTo(pb);
         });
         break;
@@ -840,7 +1052,8 @@ class _MapPageState extends State<MapPage> {
   @override
   void dispose() {
     _refreshTimer?.cancel();
-    _mapMoveDebounce?.cancel();
+    _searchDebounce?.cancel();
+    _searchController.dispose();
     _mapController.dispose();
     _listScrollController.dispose();
     super.dispose();
