@@ -14,12 +14,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.0
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: 'stable'
+          channel: stable
 
       - name: Enable web
         run: flutter config --enable-web
@@ -28,7 +28,7 @@ jobs:
         run: flutter pub get
 
       - name: Build web
-        run: flutter build web --release --base-href "/NOME-REPO/"
+        run: flutter build web --release --base-href "/Mappa-Benzinai/"
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
