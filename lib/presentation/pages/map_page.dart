@@ -210,8 +210,13 @@ class _MapPageState extends State<MapPage> {
                 color: AppTheme.primaryColor,
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Icon(Icons.local_gas_station,
-                  color: Colors.white, size: 36),
+              child: Image.asset(
+                'assets/icons/logo.png',
+                width: 36,
+                height: 36,
+                fit: BoxFit.contain,
+              ),
+
             ),
             const SizedBox(height: 20),
             Text(AppConstants.appName,
@@ -417,8 +422,12 @@ class _MapPageState extends State<MapPage> {
               color: AppTheme.primaryColor,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.local_gas_station,
-                color: Colors.white, size: 17),
+            child: Image.asset(
+              'assets/icons/logo.png',
+              width: 18,
+              height: 18,
+              fit: BoxFit.contain,
+            ), 
           ),
           const SizedBox(width: 10),
           Text(

@@ -26,11 +26,12 @@ class _AuthPageState extends State<AuthPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 40),
-              // Logo/Header
-              Text(
-                '⛽',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(fontSize: 64),
+              Image.asset(
+                'assets/icons/logo.png', 
+                width: 200, 
+                height: 200,
+                fit: BoxFit
+                    .contain, 
               ),
               const SizedBox(height: 16),
               Text(
