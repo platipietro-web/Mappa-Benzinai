@@ -9,22 +9,30 @@ import 'package:mappa_prezzi_benzina/domain/entities/user_location.dart';
 // Questi sono gli UNICI nomi usati in tutta l'app (parser, filtri, dettaglio).
 // Modificare qui si propaga ovunque.
 class FuelTypes {
-  static const benzina            = 'Benzina';
-  static const benzinaSp100       = 'Benzina Speciale 100';
-  static const diesel             = 'Diesel';
-  static const dieselPlus         = 'Diesel+';
-  static const dieselHvo          = 'Diesel HVO';
-  static const hvo                = 'HVO';
-  static const gpl                = 'GPL';
-  static const metano             = 'Metano';
-  static const gnc                = 'GNC';
-  static const gnl                = 'GNL';
-  static const idrogeno           = 'Idrogeno';
+  static const benzina = 'Benzina';
+  static const benzinaSp100 = 'Benzina Speciale 100';
+  static const diesel = 'Diesel';
+  static const dieselPlus = 'Diesel+';
+  static const dieselHvo = 'Diesel HVO';
+  static const hvo = 'HVO';
+  static const gpl = 'GPL';
+  static const metano = 'Metano';
+  static const gnc = 'GNC';
+  static const gnl = 'GNL';
+  static const idrogeno = 'Idrogeno';
 
   static const all = [
-    benzina, benzinaSp100,
-    diesel, dieselPlus, dieselHvo, hvo,
-    gpl, metano, gnc, gnl, idrogeno,
+    benzina,
+    benzinaSp100,
+    diesel,
+    dieselPlus,
+    dieselHvo,
+    hvo,
+    gpl,
+    metano,
+    gnc,
+    gnl,
+    idrogeno,
   ];
 }
 
@@ -136,13 +144,15 @@ class FuelPriceApiImpl implements FuelPriceApi {
 
   Map<String, Map<String, double>> _parsePricesCsv(String csv) {
     final records = _parseCsv(csv);
-    final result = <String, Map<String, double>>{};
+
+    // Prima passata: raccogli TUTTI i prezzi per ogni (id, fuelType)
+    // Struttura: id -> fuelType -> lista di prezzi trovati
+    final allPrices = <String, Map<String, List<double>>>{};
 
     for (final r in records) {
       final id = r['idImpianto'] ?? r['idimpianto'] ?? '';
       final fuelRaw = r['descCarburante'] ?? r['Descrizione Carburante'] ?? '';
       final priceRaw = r['prezzo'] ?? r['Prezzo'] ?? '';
-      final isSelfRaw = _clean(r['isSelf']).toLowerCase();
 
       if (id.isEmpty) continue;
       final fuelType = _normalizeFuelType(fuelRaw);
@@ -150,26 +160,55 @@ class FuelPriceApiImpl implements FuelPriceApi {
       final price = _parseDouble(priceRaw);
       if (price == null || price <= 0.5 || price > 5.0) continue;
 
-      final stationPrices = result.putIfAbsent(id, () => {});
-      final existing = stationPrices[fuelType];
+      allPrices
+          .putIfAbsent(id, () => {})
+          .putIfAbsent(fuelType, () => [])
+          .add(price);
+    }
 
-      final isSelf = isSelfRaw == '1' || isSelfRaw == 'true';
-      final existingIsSelf =
-          existing != null && stationPrices['${fuelType}_isSelf'] == 1.0;
+    // Seconda passata: per ogni stazione risolvi i duplicati
+    final result = <String, Map<String, double>>{};
 
-      if (existing == null ||
-          (isSelf && !existingIsSelf) ||
-          (isSelf == existingIsSelf && price < existing)) {
-        stationPrices[fuelType] = price;
-        stationPrices['${fuelType}_isSelf'] = isSelf ? 1.0 : 0.0;
+    for (final entry in allPrices.entries) {
+      final id = entry.key;
+      final fuelMap = entry.value;
+      final stationPrices = <String, double>{};
+
+      for (final fuelEntry in fuelMap.entries) {
+        final fuelType = fuelEntry.key;
+        final prices = fuelEntry.value..sort(); // ordina dal più basso
+
+        if (prices.length == 1) {
+          // Un solo prezzo → salvalo normalmente
+          stationPrices[fuelType] = prices.first;
+        } else {
+          // Più prezzi per lo stesso tipo base → distingui normale vs speciale
+          // Il prezzo più basso = normale (self-service)
+          // Il prezzo più alto  = speciale/premium (servito)
+          stationPrices[fuelType] = prices.first; // il più basso
+
+          // Mappa il tipo base al suo equivalente speciale
+          final specialType = _specialVariant(fuelType);
+          if (specialType != null) {
+            // Usa il prezzo più alto come speciale
+            stationPrices[specialType] = prices.last;
+          }
+        }
+      }
+
+      if (stationPrices.isNotEmpty) {
+        result[id] = stationPrices;
       }
     }
 
-    for (final prices in result.values) {
-      prices.removeWhere((key, _) => key.endsWith('_isSelf'));
-    }
-
     return result;
+  }
+
+  /// Ritorna il nome "speciale" corrispondente al tipo base, o null se non applicabile
+  String? _specialVariant(String fuelType) {
+    if (fuelType == FuelTypes.benzina) return FuelTypes.benzinaSp100;
+    if (fuelType == FuelTypes.diesel) return FuelTypes.dieselPlus;
+    return null; // GPL, Metano, ecc. non hanno variante speciale
   }
 
   List<GasStationModel> _parseStationsCsv(
@@ -192,10 +231,10 @@ class FuelPriceApiImpl implements FuelPriceApi {
       final prices = pricesByStation[id];
       if (prices == null || prices.isEmpty) continue;
 
-      final brand   = _clean(r['Bandiera']);
-      final nome    = _clean(r['Nome Impianto'] ?? r['NomeImpianto'] ?? '');
+      final brand = _clean(r['Bandiera']);
+      final nome = _clean(r['Nome Impianto'] ?? r['NomeImpianto'] ?? '');
       final gestore = _clean(r['Gestore'] ?? '');
-      final tipo    = _clean(r['Tipo Impianto'] ?? r['TipoImpianto'] ?? '');
+      final tipo = _clean(r['Tipo Impianto'] ?? r['TipoImpianto'] ?? '');
 
       final displayName = nome.isNotEmpty
           ? nome
@@ -247,58 +286,113 @@ class FuelPriceApiImpl implements FuelPriceApi {
     if (cleaned.isEmpty) return null;
     final n = cleaned.toLowerCase();
 
-    // ── Benzina ────────────────────────────────────────────────────────────
-    if (n.contains('benzina')) {
-      // Tutto ciò che non è benzina base standard è "Benzina Speciale 100"
-      final isSpecial =
-          n.contains('100')       ||
-          n.contains('super')     ||
-          n.contains('premium')   ||
-          n.contains('special')   ||
-          n.contains('speciale')  ||
-          n.contains('v-power')   ||
-          n.contains('vpower')    ||
-          n.contains('ultimate')  ||
-          n.contains('excellium') ||
-          n.contains('supreme')   ||
-          n.contains('racing')    ||
-          n.contains('hi')        ||  // hi-octane, hi-perf
-          n.contains('plus');
-      return isSpecial ? FuelTypes.benzinaSp100 : FuelTypes.benzina;
+    // ── Benzina Speciale 100 — nomi brand-specifici nel CSV MIMIT ──────────
+    // ENI/Agip: "Blue Super", "Blue Super+"
+    // Q8:       "Hi-Q Perform+", "HiQ Perform+", "Hi-Q 100"
+    // Shell:    "V-Power" (senza diesel nel nome)
+    // Esso:     "Supreme+" (senza gasolio nel nome)
+    // IP:       "Optimo", "Racing Fuel"
+    // Tamoil:   "Excellium Benzina", "Excellium 100"
+    // Generici: "Benzina 100", "Benzina Super", "Benzina Premium", "Benzina Speciale"
+    if (_isBenzinaSp100(n)) return FuelTypes.benzinaSp100;
+
+    // ── Benzina base ───────────────────────────────────────────────────────
+    if (n.contains('benzina')) return FuelTypes.benzina;
+
+    // ── Diesel HVO ─────────────────────────────────────────────────────────
+    if ((n.contains('gasolio') || n.contains('diesel')) && n.contains('hvo')) {
+      return FuelTypes.dieselHvo;
     }
 
-    // ── Diesel ─────────────────────────────────────────────────────────────
-    if (n.contains('gasolio') || n.contains('diesel')) {
-      if (n.contains('hvo'))                          return FuelTypes.dieselHvo;
-      if (n.contains('plus')     ||
-          n.contains('+')        ||
-          n.contains('premium')  ||
-          n.contains('excellium')||
-          n.contains('v-power')  ||
-          n.contains('ultimate') ||
-          n.contains('supreme')  ||
-          n.contains('blu')      ||
-          n.contains('special')  ||
-          n.contains('speciale')) return FuelTypes.dieselPlus;
-      return FuelTypes.diesel;
-    }
+    // ── Diesel+ — nomi brand-specifici nel CSV MIMIT ───────────────────────
+    // ENI/Agip: "Blue Diesel", "Blue Diesel+"
+    // Q8:       "Hi-Q Diesel", "HiQ Diesel"
+    // Shell:    "V-Power Diesel"
+    // Esso:     "Supreme Diesel"
+    // IP:       "Extraverde", "Excellium Diesel"
+    // Generici: "Gasolio Speciale", "Diesel Premium", "Diesel+"
+    if (_isDieselPlus(n)) return FuelTypes.dieselPlus;
+
+    // ── Diesel base ────────────────────────────────────────────────────────
+    if (n.contains('gasolio') || n.contains('diesel')) return FuelTypes.diesel;
 
     // ── HVO puro ───────────────────────────────────────────────────────────
-    if (n.contains('hvo'))                            return FuelTypes.hvo;
+    if (n.contains('hvo')) return FuelTypes.hvo;
 
     // ── Gas ────────────────────────────────────────────────────────────────
-    if (n.contains('gpl'))                            return FuelTypes.gpl;
-    if (n.contains('gnc') || n.contains('l-gnc'))    return FuelTypes.gnc;
-    if (n.contains('gnl'))                            return FuelTypes.gnl;
-    if (n.contains('metano'))                         return FuelTypes.metano;
+    if (n.contains('gpl')) return FuelTypes.gpl;
+    if (n.contains('gnc') || n.contains('l-gnc')) return FuelTypes.gnc;
+    if (n.contains('gnl')) return FuelTypes.gnl;
+    if (n.contains('metano')) return FuelTypes.metano;
 
     // ── Idrogeno ───────────────────────────────────────────────────────────
-    if (n.contains('idrogeno') ||
-        n.contains('hydrogen') ||
-        n.contains('h2'))                             return FuelTypes.idrogeno;
+    if (n.contains('idrogeno') || n.contains('hydrogen') || n == 'h2') {
+      return FuelTypes.idrogeno;
+    }
 
-    // Ignora carburanti sconosciuti invece di creare nomi liberi
     return null;
+  }
+
+  bool _isBenzinaSp100(String n) {
+    // Nomi che contengono "benzina" + qualificatore speciale
+    if (n.contains('benzina')) {
+      return n.contains('100') ||
+          n.contains('super') ||
+          n.contains('premium') ||
+          n.contains('special') ||
+          n.contains('speciale') ||
+          n.contains('plus') ||
+          n.contains('racing') ||
+          n.contains('optimo');
+    }
+    // Nomi brand-specifici che NON contengono "benzina" ma sono benzina speciale
+    if (n.contains('blue super')) return true; // ENI
+    if (n.contains('blu super')) return true; // ENI variante
+    if (n.contains('hi-q perform')) return true; // Q8
+    if (n.contains('hiq perform')) return true; // Q8 variante
+    if (n.contains('hi-q 100')) return true; // Q8
+    if (n.contains('hiq 100')) return true; // Q8 variante
+    if (n.contains('v-power') &&
+        !n.contains('diesel') &&
+        !n.contains('gasolio')) return true; // Shell
+    if (n.contains('vpower') && !n.contains('diesel') && !n.contains('gasolio'))
+      return true; // Shell variante
+    if (n.contains('supreme') &&
+        !n.contains('diesel') &&
+        !n.contains('gasolio')) return true; // Esso
+    if (n.contains('excellium') &&
+        (n.contains('benz') ||
+            n.contains('100') ||
+            (!n.contains('diesel') && !n.contains('gasolio'))))
+      return true; // Tamoil
+    if (n.contains('racing fuel')) return true;
+    if (n.contains('optimo')) return true; // IP
+    return false;
+  }
+
+  bool _isDieselPlus(String n) {
+    if (n.contains('gasolio') || n.contains('diesel')) {
+      return n.contains('special') ||
+          n.contains('speciale') ||
+          n.contains('premium') ||
+          n.contains('plus') ||
+          n.contains('+') ||
+          n.contains('blu') || // Blue Diesel ENI
+          n.contains('blue') ||
+          n.contains('hi-q') || // Hi-Q Diesel Q8
+          n.contains('hiq') ||
+          n.contains('v-power') || // V-Power Diesel Shell
+          n.contains('vpower') ||
+          n.contains('supreme') || // Supreme Diesel Esso
+          n.contains('excellium') || // Excellium Diesel Tamoil
+          n.contains('extra') || // Extraverde IP
+          n.contains('ultimate');
+    }
+    // Nomi che non contengono "gasolio"/"diesel" ma sono diesel speciale
+    if (n.contains('extraverde')) return true; // IP
+    if (n.contains('blue diesel')) return true;
+    if (n.contains('blu diesel')) return true;
+    return false;
   }
 
   // ─── CSV Utilities ─────────────────────────────────────────────────────────
@@ -397,18 +491,18 @@ out center tags 100;
 
     for (final el in elements) {
       if (el is! Map<String, dynamic>) continue;
-      final tags   = (el['tags']   as Map<String, dynamic>?) ?? {};
+      final tags = (el['tags'] as Map<String, dynamic>?) ?? {};
       final center = (el['center'] as Map<String, dynamic>?) ?? {};
 
       final lat = _asDouble(el['lat'] ?? center['lat']);
       final lon = _asDouble(el['lon'] ?? center['lon']);
       if (lat == null || lon == null) continue;
 
-      final brand     = _clean(tags['brand']?.toString());
-      final name      = _clean(tags['name']?.toString());
+      final brand = _clean(tags['brand']?.toString());
+      final name = _clean(tags['name']?.toString());
       final operator0 = _clean(tags['operator']?.toString());
-      final displayName =
-          [name, brand, operator0, 'Distributore'].firstWhere((s) => s.isNotEmpty);
+      final displayName = [name, brand, operator0, 'Distributore']
+          .firstWhere((s) => s.isNotEmpty);
 
       final address = [
         tags['addr:street'],
@@ -435,8 +529,8 @@ out center tags 100;
 
     stations.sort((a, b) => a
         .getDistanceFromCoordinates(location.latitude, location.longitude)
-        .compareTo(
-            b.getDistanceFromCoordinates(location.latitude, location.longitude)));
+        .compareTo(b.getDistanceFromCoordinates(
+            location.latitude, location.longitude)));
 
     logInfo('OSM fallback returned ${stations.length} stations');
     return stations;
