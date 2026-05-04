@@ -127,8 +127,8 @@ class FuelPriceApiImpl implements FuelPriceApi {
       throw ApiException(message: 'MIMIT prezzi CSV vuoto');
     }
 
-    final pricesByStation = _parsePricesCsv(pricesCsv);
-    final stations = _parseStationsCsv(stationsCsv, pricesByStation);
+    final parsedPrices = _parsePricesCsv(pricesCsv);
+    final stations = _parseStationsCsv(stationsCsv, parsedPrices);
 
     _cachedStations = stations;
     _lastCacheUpdate = DateTime.now();
@@ -138,12 +138,15 @@ class FuelPriceApiImpl implements FuelPriceApi {
 
   // ─── CSV Parsing ───────────────────────────────────────────────────────────
 
-  Map<String, Map<String, double>> _parsePricesCsv(String csv) {
+  _ParsedPrices _parsePricesCsv(String csv) {
     final records = _parseCsv(csv);
+    final now = DateTime.now();
 
-    // Prima passata: raccogli TUTTI i prezzi per ogni (id, fuelType)
+    // Prima passata: raccogli TUTTI i prezzi e la data più recente per stazione
     // Struttura: id -> fuelType -> lista di prezzi trovati
     final allPrices = <String, Map<String, List<double>>>{};
+    // id -> data più recente di aggiornamento prezzo (dtComu)
+    final latestDates = <String, DateTime>{};
 
     for (final r in records) {
       final id = r['idImpianto'] ?? r['idimpianto'] ?? '';
@@ -154,12 +157,29 @@ class FuelPriceApiImpl implements FuelPriceApi {
       final fuelType = _normalizeFuelType(fuelRaw);
       if (fuelType == null) continue;
       final price = _parseDouble(priceRaw);
-      if (price == null || price <= 0.5 || price > 5.0) continue;
+      // Range realistico per il mercato italiano (GPL ~0.65, carburanti premium ~3.0)
+      if (price == null || price < 0.65 || price > 3.5) continue;
+
+      // Salta prezzi non aggiornati da più di 60 giorni: indicano pompe inattive
+      final dateRaw = r['dtComu'] ?? r['DtComu'] ?? r['dt_Comu'] ?? '';
+      DateTime? priceDate;
+      if (dateRaw.isNotEmpty) {
+        priceDate = _parseDate(dateRaw);
+        if (priceDate != null && now.difference(priceDate).inDays > 60) continue;
+      }
 
       allPrices
           .putIfAbsent(id, () => {})
           .putIfAbsent(fuelType, () => [])
           .add(price);
+
+      // Tieni traccia della data più recente per questa stazione
+      if (priceDate != null) {
+        final current = latestDates[id];
+        if (current == null || priceDate.isAfter(current)) {
+          latestDates[id] = priceDate;
+        }
+      }
     }
 
     // Seconda passata: per ogni stazione risolvi i duplicati
@@ -197,7 +217,7 @@ class FuelPriceApiImpl implements FuelPriceApi {
       }
     }
 
-    return result;
+    return _ParsedPrices(result, latestDates);
   }
 
   /// Ritorna il nome "speciale" corrispondente al tipo base, o null se non applicabile
@@ -209,14 +229,20 @@ class FuelPriceApiImpl implements FuelPriceApi {
 
   List<GasStationModel> _parseStationsCsv(
     String csv,
-    Map<String, Map<String, double>> pricesByStation,
+    _ParsedPrices parsedPrices,
   ) {
+    final pricesByStation = parsedPrices.prices;
+    final datesByStation = parsedPrices.latestDates;
     final records = _parseCsv(csv);
     final stations = <GasStationModel>[];
 
     for (final r in records) {
       final id = r['idImpianto'] ?? r['idimpianto'] ?? '';
       if (id.isEmpty) continue;
+
+      // Salta stazioni esplicitamente marcate come inattive
+      final flagAttivo = _clean(r['flagAttivo'] ?? r['FlagAttivo'] ?? '');
+      if (flagAttivo == '0') continue;
 
       final lat = _parseDouble(r['Latitudine']);
       final lon = _parseDouble(r['Longitudine']);
@@ -256,7 +282,7 @@ class FuelPriceApiImpl implements FuelPriceApi {
         longitude: lon,
         prices: prices,
         brand: brand.isNotEmpty ? brand : null,
-        lastUpdated: DateTime.now(),
+        lastUpdated: datesByStation[id],
         openingHours: tipo.isNotEmpty ? tipo : null,
       ));
     }
@@ -454,6 +480,32 @@ class FuelPriceApiImpl implements FuelPriceApi {
     return double.tryParse(_clean(v).replaceAll(',', '.'));
   }
 
+  // Parsa formati data MIMIT: "dd/MM/yyyy HH:mm:ss", "M/d/yyyy h:mm:ss AM/PM", "yyyy-MM-dd"
+  DateTime? _parseDate(String raw) {
+    if (raw.isEmpty) return null;
+    final s = raw.trim();
+    try {
+      // ISO: yyyy-MM-dd o yyyy-MM-dd HH:mm:ss
+      if (RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(s)) {
+        return DateTime.parse(s.substring(0, 10));
+      }
+      // dd/MM/yyyy [HH:mm:ss] o M/d/yyyy [h:mm:ss AM/PM]
+      final parts = s.split(' ');
+      final dateParts = parts[0].split('/');
+      if (dateParts.length == 3) {
+        final a = int.tryParse(dateParts[0]);
+        final b = int.tryParse(dateParts[1]);
+        final c = int.tryParse(dateParts[2]);
+        if (a == null || b == null || c == null) return null;
+        // Se il primo numero è 4 cifre → yyyy/MM/dd
+        if (dateParts[0].length == 4) return DateTime(a, b, c);
+        // Altrimenti dd/MM/yyyy
+        return DateTime(c, b, a);
+      }
+    } catch (_) {}
+    return null;
+  }
+
   // ─── OpenStreetMap Fallback ────────────────────────────────────────────────
 
   Future<List<GasStationModel>> _getOpenStreetMapStations(
@@ -537,4 +589,10 @@ out center tags 100;
     if (v is String) return double.tryParse(v);
     return null;
   }
+}
+
+class _ParsedPrices {
+  final Map<String, Map<String, double>> prices;
+  final Map<String, DateTime> latestDates;
+  const _ParsedPrices(this.prices, this.latestDates);
 }

@@ -326,16 +326,16 @@ class _MapPageState extends State<MapPage> {
                         ],
                       ),
                     ),
-                    // Lista scrollabile verticalmente
+                    // Lista scrollabile verticalmente — ListView non-lazy
+                    // così ogni GlobalKey ha sempre un context valido
+                    // e Scrollable.ensureVisible funziona sempre
                     Expanded(
                       child: stations.isEmpty
                           ? _buildEmptyList()
-                          : ListView.builder(
+                          : ListView(
                               controller: _listScrollController,
                               padding: const EdgeInsets.all(12),
-                              itemCount: stations.length,
-                              itemBuilder: (context, index) {
-                                final station = stations[index];
+                              children: stations.map((station) {
                                 final isSelected =
                                     state.selectedStation?.id == station.id;
                                 final key = _stationKeys.putIfAbsent(
@@ -352,7 +352,7 @@ class _MapPageState extends State<MapPage> {
                                         _onCardTap(context, station, state),
                                   ),
                                 );
-                              },
+                              }).toList(),
                             ),
                     ),
                   ],
@@ -924,7 +924,17 @@ class _MapPageState extends State<MapPage> {
   List<GasStation> _filterAndSortStations(List<GasStation> stations) {
     final effectiveTypes = _expandFuelTypes(_selectedFuelTypes);
 
-    final filtered = stations.where((s) {
+    // Ritaglia alle sole stazioni nel viewport corrente: filtri e ordinamento
+    // hanno senso solo sull'area che l'utente sta guardando
+    List<GasStation> inView = stations;
+    try {
+      final bounds = _mapController.camera.visibleBounds;
+      inView = stations
+          .where((s) => bounds.contains(LatLng(s.latitude, s.longitude)))
+          .toList();
+    } catch (_) {}
+
+    final filtered = inView.where((s) {
       final fuelMatch = s.prices.isEmpty ||
           effectiveTypes.any((ft) => s.prices.containsKey(ft));
       final brandMatch = _selectedBrands.isEmpty ||
@@ -982,6 +992,7 @@ class _MapPageState extends State<MapPage> {
     context.read<MapBloc>().add(LoadNearbyStationsEvent(
           location: location,
           radiusKm: AppConstants.stationSearchRadius,
+          isGpsLocation: true,
         ));
   }
 

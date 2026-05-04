@@ -15,14 +15,18 @@ abstract class MapBlocEvent extends Equatable {
 class LoadNearbyStationsEvent extends MapBlocEvent {
   final UserLocation location;
   final double radiusKm;
+  // true solo quando la location arriva dal GPS del dispositivo:
+  // il pin dell'utente si sposta solo in quel caso
+  final bool isGpsLocation;
 
   const LoadNearbyStationsEvent({
     required this.location,
     required this.radiusKm,
+    this.isGpsLocation = false,
   });
 
   @override
-  List<Object?> get props => [location, radiusKm];
+  List<Object?> get props => [location, radiusKm, isGpsLocation];
 }
 
 class RefreshStationsEvent extends MapBlocEvent {
@@ -53,7 +57,6 @@ class MapInitial extends MapState {
 }
 
 class MapLoading extends MapState {
-  // Mantiene le stazioni già caricate visibili mentre carica le nuove
   final List<GasStation> stations;
   final GasStation? selectedStation;
   final UserLocation? userLocation;
@@ -102,8 +105,11 @@ class MapBloc extends Bloc<MapBlocEvent, MapState> {
     on<DeselectStationEvent>(_onDeselectStation);
   }
 
-  UserLocation? _currentLocation;
-  // Mappa id -> stazione: accumula stazioni da aree diverse senza duplicati
+  // Posizione GPS reale del dispositivo — aggiornata solo da isGpsLocation=true
+  UserLocation? _gpsLocation;
+  // Centro usato per le query — può essere qualsiasi luogo cercato/navigato
+  UserLocation? _queryCenter;
+
   final Map<String, GasStation> _stationsMap = {};
   GasStation? _selectedStation;
 
@@ -111,13 +117,15 @@ class MapBloc extends Bloc<MapBlocEvent, MapState> {
     LoadNearbyStationsEvent event,
     Emitter<MapState> emit,
   ) async {
-    _currentLocation = event.location;
+    _queryCenter = event.location;
+    if (event.isGpsLocation) {
+      _gpsLocation = event.location;
+    }
 
-    // Emetti loading mantenendo le stazioni già caricate visibili
     emit(MapLoading(
       stations: _stationsMap.values.toList(),
       selectedStation: _selectedStation,
-      userLocation: _currentLocation,
+      userLocation: _gpsLocation,
     ));
 
     try {
@@ -126,12 +134,10 @@ class MapBloc extends Bloc<MapBlocEvent, MapState> {
         event.radiusKm,
       );
 
-      // Merge: aggiungi le nuove stazioni senza sovrascrivere quelle esistenti
       for (final station in newStations) {
         _stationsMap[station.id] = station;
       }
 
-      // Limita a 2000 stazioni totali rimuovendo quelle più lontane dal centro corrente
       if (_stationsMap.length > 2000) {
         final center = event.location;
         final sorted = _stationsMap.values.toList()
@@ -139,7 +145,6 @@ class MapBloc extends Bloc<MapBlocEvent, MapState> {
               .getDistanceFromCoordinates(center.latitude, center.longitude)
               .compareTo(b.getDistanceFromCoordinates(
                   center.latitude, center.longitude)));
-        // Tieni le 2000 più vicine
         _stationsMap.clear();
         for (final s in sorted.take(2000)) {
           _stationsMap[s.id] = s;
@@ -149,15 +154,14 @@ class MapBloc extends Bloc<MapBlocEvent, MapState> {
       emit(MapLoaded(
         stations: _stationsMap.values.toList(),
         selectedStation: _selectedStation,
-        userLocation: _currentLocation,
+        userLocation: _gpsLocation,
       ));
     } catch (e) {
-      // In caso di errore mostra le stazioni già caricate se esistono
       if (_stationsMap.isNotEmpty) {
         emit(MapLoaded(
           stations: _stationsMap.values.toList(),
           selectedStation: _selectedStation,
-          userLocation: _currentLocation,
+          userLocation: _gpsLocation,
         ));
       } else {
         emit(MapError('Impossibile caricare le stazioni: ${e.toString()}'));
@@ -169,12 +173,13 @@ class MapBloc extends Bloc<MapBlocEvent, MapState> {
     RefreshStationsEvent event,
     Emitter<MapState> emit,
   ) async {
-    if (_currentLocation != null) {
-      // Refresh: svuota la cache e ricarica
+    final center = _queryCenter ?? _gpsLocation;
+    if (center != null) {
       _stationsMap.clear();
       add(LoadNearbyStationsEvent(
-        location: _currentLocation!,
+        location: center,
         radiusKm: 50,
+        isGpsLocation: false,
       ));
     }
   }
@@ -187,7 +192,7 @@ class MapBloc extends Bloc<MapBlocEvent, MapState> {
     emit(MapLoaded(
       stations: _stationsMap.values.toList(),
       selectedStation: event.station,
-      userLocation: _currentLocation,
+      userLocation: _gpsLocation,
     ));
   }
 
@@ -199,7 +204,7 @@ class MapBloc extends Bloc<MapBlocEvent, MapState> {
     emit(MapLoaded(
       stations: _stationsMap.values.toList(),
       selectedStation: null,
-      userLocation: _currentLocation,
+      userLocation: _gpsLocation,
     ));
   }
 }
