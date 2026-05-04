@@ -1,11 +1,11 @@
 {
-    "name": "mappa_prezzi_benzina",
-    "short_name": "mappa_prezzi_benzina",
+    "name": "Prezzi Benzina",
+    "short_name": "Benzina",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
+    "background_color": "#ffffff",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Mappa prezzi benzina in tempo reale",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
