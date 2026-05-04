@@ -52,10 +52,6 @@ class FuelPriceApiImpl implements FuelPriceApi {
   FuelPriceApiImpl(this._dio) {
     _dio.options.connectTimeout = const Duration(seconds: 15);
     _dio.options.receiveTimeout = const Duration(seconds: 60);
-    _dio.options.headers = {
-      'Accept': 'text/csv,*/*',
-      'User-Agent': 'MappaPrezziBenzina/1.0',
-    };
   }
 
   // ─── Public ────────────────────────────────────────────────────────────────
