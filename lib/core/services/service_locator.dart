@@ -19,62 +19,45 @@ import 'package:mappa_prezzi_benzina/domain/repositories/repositories.dart';
 
 // BLoCs
 import 'package:mappa_prezzi_benzina/presentation/bloc/auth_bloc.dart';
+import 'package:mappa_prezzi_benzina/presentation/bloc/favorites_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/location_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/map_bloc.dart';
 
 final getIt = GetIt.instance;
 
 void setupServiceLocator() {
-  // Firebase Setup
   final firebaseAuth = FirebaseAuth.instance;
   final firestore = FirebaseFirestore.instance;
-  
-  // External Dependencies
   final dio = Dio();
 
   // Data Sources
-  getIt.registerSingleton<AuthService>(
-    AuthServiceImpl(firebaseAuth),
-  );
-
-  getIt.registerSingleton<FirestoreService>(
-    FirestoreServiceImpl(firestore),
-  );
-
-  getIt.registerSingleton<LocationService>(
-    LocationServiceImpl(),
-  );
-
-  getIt.registerSingleton<FuelPriceApi>(
-    FuelPriceApiImpl(dio),
-  );
+  getIt.registerSingleton<AuthService>(AuthServiceImpl(firebaseAuth));
+  getIt.registerSingleton<FirestoreService>(FirestoreServiceImpl(firestore));
+  getIt.registerSingleton<LocationService>(LocationServiceImpl());
+  getIt.registerSingleton<FuelPriceApi>(FuelPriceApiImpl(dio));
 
   // Repositories
   getIt.registerSingleton<AuthRepository>(
-    AuthRepositoryImpl(getIt<AuthService>()),
+    AuthRepositoryImpl(
+      getIt<AuthService>(),
+      getIt<FirestoreService>(),
+    ),
   );
-
   getIt.registerSingleton<GasStationRepository>(
     GasStationRepositoryImpl(
       getIt<FirestoreService>(),
       getIt<FuelPriceApi>(),
     ),
   );
-
   getIt.registerSingleton<LocationRepository>(
     LocationRepositoryImpl(getIt<LocationService>()),
   );
 
   // BLoCs
-  getIt.registerSingleton<AuthBloc>(
-    AuthBloc(getIt<AuthRepository>()),
-  );
-
+  getIt.registerSingleton<AuthBloc>(AuthBloc(getIt<AuthRepository>()));
+  getIt.registerSingleton<FavoritesBloc>(
+      FavoritesBloc(getIt<GasStationRepository>()));
   getIt.registerSingleton<LocationBloc>(
-    LocationBloc(getIt<LocationRepository>()),
-  );
-
-  getIt.registerSingleton<MapBloc>(
-    MapBloc(getIt<GasStationRepository>()),
-  );
+      LocationBloc(getIt<LocationRepository>()));
+  getIt.registerSingleton<MapBloc>(MapBloc(getIt<GasStationRepository>()));
 }

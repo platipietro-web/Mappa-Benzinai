@@ -3,7 +3,8 @@ import 'package:mappa_prezzi_benzina/core/constants/app_constants.dart';
 import 'package:mappa_prezzi_benzina/core/errors/exceptions.dart';
 import 'package:mappa_prezzi_benzina/core/utils/logger.dart';
 import 'package:mappa_prezzi_benzina/data/models/gas_station_model.dart';
-import 'package:mappa_prezzi_benzina/data/models/price_update_model.dart';
+import 'package:mappa_prezzi_benzina/data/models/price_update_model.dart' hide Timestamp;
+import 'package:mappa_prezzi_benzina/domain/entities/saved_station.dart';
 
 abstract class FirestoreService {
   Future<List<GasStationModel>> getNearbyStations(
@@ -14,9 +15,19 @@ abstract class FirestoreService {
   Future<GasStationModel?> getStationById(String stationId);
   Future<void> addPriceUpdate(PriceUpdateModel update);
   Future<List<PriceUpdateModel>> getPriceUpdatesForStation(String stationId);
-  Future<void> addFavorite(String userId, String stationId);
+  Future<void> createUserProfile(String userId, String email);
+  Future<void> addFavorite(
+    String userId,
+    String stationId,
+    String name,
+    String address,
+    String? brand,
+    double lat,
+    double lon,
+    Map<String, double> prices,
+  );
   Future<void> removeFavorite(String userId, String stationId);
-  Future<List<String>> getFavorites(String userId);
+  Future<List<SavedStation>> getFavorites(String userId);
 }
 
 class FirestoreServiceImpl implements FirestoreService {
@@ -43,7 +54,6 @@ class FirestoreServiceImpl implements FirestoreService {
           .map((doc) => GasStationModel.fromFirestore(doc.data(), doc.id))
           .toList();
 
-      // Firestore non supporta query geospaziali native → filtro lato client
       final nearby = stations
           .where((s) =>
               s.getDistanceFromCoordinates(latitude, longitude) <= radiusKm)
@@ -63,7 +73,6 @@ class FirestoreServiceImpl implements FirestoreService {
   @override
   Future<GasStationModel?> getStationById(String stationId) async {
     try {
-      logInfo('Firestore: fetching station $stationId');
       final doc = await _firestore
           .collection(AppConstants.stationsCollection)
           .doc(stationId)
@@ -80,11 +89,8 @@ class FirestoreServiceImpl implements FirestoreService {
   @override
   Future<void> addPriceUpdate(PriceUpdateModel update) async {
     try {
-      logInfo('Firestore: adding price update for ${update.stationId}');
-
       final batch = _firestore.batch();
 
-      // Aggiungi sub-collection price_updates
       final updateRef = _firestore
           .collection(AppConstants.stationsCollection)
           .doc(update.stationId)
@@ -92,7 +98,6 @@ class FirestoreServiceImpl implements FirestoreService {
           .doc();
       batch.set(updateRef, update.toFirestore());
 
-      // Aggiorna il prezzo corrente nella stazione
       final stationRef = _firestore
           .collection(AppConstants.stationsCollection)
           .doc(update.stationId);
@@ -113,8 +118,6 @@ class FirestoreServiceImpl implements FirestoreService {
     String stationId,
   ) async {
     try {
-      logInfo('Firestore: fetching price updates for $stationId');
-
       final snapshot = await _firestore
           .collection(AppConstants.stationsCollection)
           .doc(stationId)
@@ -134,9 +137,33 @@ class FirestoreServiceImpl implements FirestoreService {
   }
 
   @override
-  Future<void> addFavorite(String userId, String stationId) async {
+  Future<void> createUserProfile(String userId, String email) async {
     try {
-      logInfo('Firestore: adding favorite $stationId for user $userId');
+      await _firestore
+          .collection(AppConstants.usersCollection)
+          .doc(userId)
+          .set({
+        'email': email,
+        'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      // Non blocca il signup se fallisce
+      logError('Firestore: error creating user profile', e);
+    }
+  }
+
+  @override
+  Future<void> addFavorite(
+    String userId,
+    String stationId,
+    String name,
+    String address,
+    String? brand,
+    double lat,
+    double lon,
+    Map<String, double> prices,
+  ) async {
+    try {
       await _firestore
           .collection(AppConstants.usersCollection)
           .doc(userId)
@@ -144,6 +171,12 @@ class FirestoreServiceImpl implements FirestoreService {
           .doc(stationId)
           .set({
         'stationId': stationId,
+        'name': name,
+        'address': address,
+        'brand': brand,
+        'latitude': lat,
+        'longitude': lon,
+        'prices': prices,
         'addedAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
@@ -155,7 +188,6 @@ class FirestoreServiceImpl implements FirestoreService {
   @override
   Future<void> removeFavorite(String userId, String stationId) async {
     try {
-      logInfo('Firestore: removing favorite $stationId for user $userId');
       await _firestore
           .collection(AppConstants.usersCollection)
           .doc(userId)
@@ -169,18 +201,31 @@ class FirestoreServiceImpl implements FirestoreService {
   }
 
   @override
-  Future<List<String>> getFavorites(String userId) async {
+  Future<List<SavedStation>> getFavorites(String userId) async {
     try {
-      logInfo('Firestore: fetching favorites for user $userId');
       final snapshot = await _firestore
           .collection(AppConstants.usersCollection)
           .doc(userId)
           .collection(AppConstants.favoritesCollection)
           .get();
 
-      return snapshot.docs
-          .map((doc) => doc.data()['stationId'] as String)
-          .toList();
+      return snapshot.docs.map((doc) {
+        final d = doc.data();
+        final rawPrices = d['prices'] as Map<String, dynamic>? ?? {};
+        final prices = rawPrices.map(
+          (k, v) => MapEntry(k, (v as num).toDouble()),
+        );
+        return SavedStation(
+          id: d['stationId'] as String? ?? doc.id,
+          name: d['name'] as String? ?? '',
+          address: d['address'] as String? ?? '',
+          brand: d['brand'] as String?,
+          latitude: (d['latitude'] as num?)?.toDouble() ?? 0.0,
+          longitude: (d['longitude'] as num?)?.toDouble() ?? 0.0,
+          addedAt: (d['addedAt'] as Timestamp?)?.toDate(),
+          prices: prices,
+        );
+      }).toList();
     } catch (e) {
       logError('Firestore: error fetching favorites', e);
       throw DatabaseException(message: 'Impossibile caricare i preferiti');

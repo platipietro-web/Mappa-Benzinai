@@ -6,24 +6,20 @@ import 'package:mappa_prezzi_benzina/core/services/service_locator.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/gas_station.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/user_location.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/auth_bloc.dart';
+import 'package:mappa_prezzi_benzina/presentation/bloc/favorites_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/location_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/map_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
 import 'package:mappa_prezzi_benzina/presentation/pages/auth_page.dart';
 import 'package:mappa_prezzi_benzina/presentation/pages/map_page.dart';
 import 'package:mappa_prezzi_benzina/presentation/pages/station_detail_page.dart';
+import 'package:mappa_prezzi_benzina/presentation/pages/favorites_page.dart';
+import 'package:mappa_prezzi_benzina/presentation/pages/profile_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-
-  // Setup Service Locator
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   setupServiceLocator();
-
   runApp(const MyApp());
 }
 
@@ -34,32 +30,38 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
-        BlocProvider<AuthBloc>(
-          create: (context) => getIt<AuthBloc>(),
-        ),
-        BlocProvider<LocationBloc>(
-          create: (context) => getIt<LocationBloc>(),
-        ),
-        BlocProvider<MapBloc>(
-          create: (context) => getIt<MapBloc>(),
-        ),
+        BlocProvider<AuthBloc>(create: (_) => getIt<AuthBloc>()),
+        BlocProvider<FavoritesBloc>(create: (_) => getIt<FavoritesBloc>()),
+        BlocProvider<LocationBloc>(create: (_) => getIt<LocationBloc>()),
+        BlocProvider<MapBloc>(create: (_) => getIt<MapBloc>()),
       ],
       child: MaterialApp(
         title: 'Prezzi Benzina',
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
         themeMode: ThemeMode.light,
-        home: BlocBuilder<AuthBloc, AuthState>(
-          builder: (context, state) {
-            if (state is Authenticated) {
-              return const MapPage();
+        home: BlocListener<AuthBloc, AuthState>(
+          listener: (context, state) {
+            if (state is Authenticated && !state.isAnonymous) {
+              context
+                  .read<FavoritesBloc>()
+                  .add(LoadFavoritesEvent(state.userId));
+            } else if (state is Unauthenticated) {
+              context.read<FavoritesBloc>().add(const ClearFavoritesEvent());
             }
-            return const AuthPage();
           },
+          child: BlocBuilder<AuthBloc, AuthState>(
+            builder: (context, state) {
+              if (state is Authenticated) return const MapPage();
+              return const AuthPage();
+            },
+          ),
         ),
         routes: {
           '/auth': (context) => const AuthPage(),
           '/map': (context) => const MapPage(),
+          '/profile': (context) => const ProfilePage(),
+          '/favorites': (context) => const FavoritesPage(),
           '/station-detail': (context) {
             final arguments = ModalRoute.of(context)?.settings.arguments;
             final station = arguments is Map<String, Object?>

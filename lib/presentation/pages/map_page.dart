@@ -7,6 +7,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:mappa_prezzi_benzina/core/constants/app_constants.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/gas_station.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/user_location.dart';
+import 'package:mappa_prezzi_benzina/presentation/bloc/auth_bloc.dart';
+import 'package:mappa_prezzi_benzina/presentation/bloc/favorites_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/map_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/location_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
@@ -48,6 +50,19 @@ class _MapPageState extends State<MapPage> {
     super.initState();
     _requestLocationAndLoadStations();
     _startAutoRefresh();
+    // Ricarica preferiti al mount della mappa (gestisce il refresh pagina web
+    // in cui l'auth è già ripristinata prima che il BlocListener in main scatti)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authState = context.read<AuthBloc>().state;
+      if (authState is Authenticated && !authState.isAnonymous) {
+        final favState = context.read<FavoritesBloc>().state;
+        if (favState.ids.isEmpty && !favState.isLoading) {
+          context
+              .read<FavoritesBloc>()
+              .add(LoadFavoritesEvent(authState.userId));
+        }
+      }
+    });
   }
 
   void _startAutoRefresh() {
@@ -483,6 +498,9 @@ class _MapPageState extends State<MapPage> {
                     _mapController.move(
                         LatLng(loc.latitude, loc.longitude), 14);
                   }),
+                _iconBtn(Icons.person_rounded, 'Profilo', () {
+                  Navigator.pushNamed(context, '/profile');
+                }),
               ],
             ),
     );

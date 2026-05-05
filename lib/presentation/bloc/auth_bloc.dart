@@ -179,7 +179,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) {
     if (event.userId != null) {
-      emit(Authenticated(userId: event.userId!));
+      emit(Authenticated(
+        userId: event.userId!,
+        isAnonymous: _authRepository.isCurrentUserAnonymous(),
+      ));
     } else {
       emit(const Unauthenticated());
     }

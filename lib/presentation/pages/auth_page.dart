@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:mappa_prezzi_benzina/presentation/bloc/auth_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
 
 class AuthPage extends StatefulWidget {
@@ -17,204 +19,287 @@ class _AuthPageState extends State<AuthPage> {
   bool _obscurePassword = true;
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 40),
-              Image.asset(
-                'assets/icons/logo.png', 
-                width: 200, 
-                height: 200,
-                fit: BoxFit
-                    .contain, 
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Prezzi Benzina',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimaryColor,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Find the best fuel prices near you',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  color: AppTheme.textSecondaryColor,
-                ),
-              ),
-              const SizedBox(height: 40),
-
-              // Form
-              Text(
-                _isSignUp ? 'Create Account' : 'Welcome Back',
-                style: GoogleFonts.poppins(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimaryColor,
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Email Field
-              TextField(
-                controller: _emailController,
-                decoration: InputDecoration(
-                  hintText: 'Email address',
-                  prefixIcon: const Icon(Icons.email_outlined),
-                ),
-                keyboardType: TextInputType.emailAddress,
-              ),
-              const SizedBox(height: 16),
-
-              // Password Field
-              TextField(
-                controller: _passwordController,
-                decoration: InputDecoration(
-                  hintText: 'Password',
-                  prefixIcon: const Icon(Icons.lock_outlined),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscurePassword
-                          ? Icons.visibility_off
-                          : Icons.visibility,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _obscurePassword = !_obscurePassword;
-                      });
-                    },
-                  ),
-                ),
-                obscureText: _obscurePassword,
-              ),
-              const SizedBox(height: 16),
-
-              // Confirm Password (Sign Up only)
-              if (_isSignUp) ...[
-                TextField(
-                  controller: _confirmPasswordController,
-                  decoration: InputDecoration(
-                    hintText: 'Confirm password',
-                    prefixIcon: const Icon(Icons.lock_outlined),
-                  ),
-                  obscureText: true,
-                ),
-                const SizedBox(height: 24),
-              ] else
-                const SizedBox(height: 8),
-
-              // Forgot Password (Sign In only)
-              if (!_isSignUp)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () {},
-                    child: Text(
-                      'Forgot password?',
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        color: AppTheme.primaryColor,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ),
-
-              const SizedBox(height: 24),
-
-              // Sign In/Up Button
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pushReplacementNamed(context, '/map');
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Text(
-                    _isSignUp ? 'Create Account' : 'Sign In',
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Anonymous Sign In
-              OutlinedButton(
-                onPressed: () {
-                  Navigator.pushReplacementNamed(context, '/map');
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Text(
-                    'Continue as Guest',
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // Toggle Sign In/Up
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    _isSignUp
-                        ? 'Already have an account? '
-                        : "Don't have an account? ",
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      color: AppTheme.textSecondaryColor,
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _isSignUp = !_isSignUp;
-                      });
-                    },
-                    style: TextButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                    ),
-                    child: Text(
-                      _isSignUp ? 'Sign In' : 'Sign Up',
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.primaryColor,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  void _submit(BuildContext context) {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || !email.contains('@')) {
+      _showSnackbar(context, 'Inserisci un\'email valida');
+      return;
+    }
+    if (password.length < 6) {
+      _showSnackbar(context, 'La password deve essere di almeno 6 caratteri');
+      return;
+    }
+    if (_isSignUp && password != _confirmPasswordController.text) {
+      _showSnackbar(context, 'Le password non coincidono');
+      return;
+    }
+
+    if (_isSignUp) {
+      context.read<AuthBloc>().add(SignUpEvent(email: email, password: password));
+    } else {
+      context.read<AuthBloc>().add(SignInEvent(email: email, password: password));
+    }
+  }
+
+  void _forgotPassword(BuildContext context) {
+    final email = _emailController.text.trim();
+    final controller = TextEditingController(text: email);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Reset password',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.emailAddress,
+          decoration: const InputDecoration(hintText: 'La tua email'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annulla'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              final e = controller.text.trim();
+              if (e.isNotEmpty && e.contains('@')) {
+                context.read<AuthBloc>().add(ResetPasswordEvent(e));
+                _showSnackbar(context, 'Email di reset inviata');
+              } else {
+                _showSnackbar(context, 'Inserisci un\'email valida');
+              }
+            },
+            child: const Text('Invia'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSnackbar(BuildContext context, String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, style: GoogleFonts.poppins(fontSize: 13)),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.backgroundColor,
+      body: BlocConsumer<AuthBloc, AuthState>(
+        listener: (context, state) {
+          if (state is AuthError) {
+            _showSnackbar(context, state.message);
+          }
+        },
+        builder: (context, state) {
+          final isLoading = state is AuthLoading;
+
+          return SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 40),
+                  Image.asset(
+                    'assets/icons/logo.png',
+                    width: 100,
+                    height: 100,
+                    fit: BoxFit.contain,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Prezzi Benzina',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.poppins(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimaryColor,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Trova i prezzi migliori vicino a te',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: AppTheme.textSecondaryColor,
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+
+                  Text(
+                    _isSignUp ? 'Crea account' : 'Bentornato',
+                    style: GoogleFonts.poppins(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimaryColor,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Email
+                  TextField(
+                    controller: _emailController,
+                    enabled: !isLoading,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      hintText: 'Indirizzo email',
+                      prefixIcon: const Icon(Icons.email_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Password
+                  TextField(
+                    controller: _passwordController,
+                    enabled: !isLoading,
+                    obscureText: _obscurePassword,
+                    decoration: InputDecoration(
+                      hintText: 'Password',
+                      prefixIcon: const Icon(Icons.lock_outlined),
+                      suffixIcon: IconButton(
+                        icon: Icon(_obscurePassword
+                            ? Icons.visibility_off
+                            : Icons.visibility),
+                        onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Conferma password (solo registrazione)
+                  if (_isSignUp) ...[
+                    TextField(
+                      controller: _confirmPasswordController,
+                      enabled: !isLoading,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        hintText: 'Conferma password',
+                        prefixIcon: Icon(Icons.lock_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ] else ...[
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed:
+                            isLoading ? null : () => _forgotPassword(context),
+                        child: Text(
+                          'Password dimenticata?',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: AppTheme.primaryColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 24),
+
+                  // Pulsante principale
+                  ElevatedButton(
+                    onPressed: isLoading ? null : () => _submit(context),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      child: isLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              _isSignUp ? 'Crea account' : 'Accedi',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // Continua come ospite
+                  OutlinedButton(
+                    onPressed: isLoading
+                        ? null
+                        : () => context
+                            .read<AuthBloc>()
+                            .add(const SignInAnonymouslyEvent()),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      child: Text(
+                        'Continua come ospite',
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Toggle registrazione/login
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        _isSignUp
+                            ? 'Hai già un account? '
+                            : 'Non hai un account? ',
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          color: AppTheme.textSecondaryColor,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: isLoading
+                            ? null
+                            : () =>
+                                setState(() => _isSignUp = !_isSignUp),
+                        style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                        child: Text(
+                          _isSignUp ? 'Accedi' : 'Registrati',
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.primaryColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 }

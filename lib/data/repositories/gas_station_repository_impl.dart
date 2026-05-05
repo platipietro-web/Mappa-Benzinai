@@ -4,6 +4,7 @@ import 'package:mappa_prezzi_benzina/data/datasources/fuel_price_api.dart';
 import 'package:mappa_prezzi_benzina/data/models/price_update_model.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/gas_station.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/price_update.dart';
+import 'package:mappa_prezzi_benzina/domain/entities/saved_station.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/user_location.dart';
 import 'package:mappa_prezzi_benzina/domain/repositories/repositories.dart';
 
@@ -83,9 +84,18 @@ class GasStationRepositoryImpl implements GasStationRepository {
   }
 
   @override
-  Future<void> addToFavorites(String userId, String stationId) async {
+  Future<void> addToFavorites(String userId, GasStation station) async {
     try {
-      await _firestoreService.addFavorite(userId, stationId);
+      await _firestoreService.addFavorite(
+        userId,
+        station.id,
+        station.name,
+        station.address,
+        station.brand,
+        station.latitude,
+        station.longitude,
+        station.prices,
+      );
     } catch (e) {
       logError('Error in addToFavorites repository', e);
       rethrow;
@@ -103,7 +113,7 @@ class GasStationRepositoryImpl implements GasStationRepository {
   }
 
   @override
-  Future<List<String>> getFavorites(String userId) async {
+  Future<List<SavedStation>> getFavorites(String userId) async {
     try {
       return await _firestoreService.getFavorites(userId);
     } catch (e) {

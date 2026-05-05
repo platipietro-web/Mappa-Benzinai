@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/gas_station.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/user_location.dart';
+import 'package:mappa_prezzi_benzina/presentation/bloc/auth_bloc.dart';
+import 'package:mappa_prezzi_benzina/presentation/bloc/favorites_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
 import 'package:mappa_prezzi_benzina/core/services/service_locator.dart';
 import 'package:mappa_prezzi_benzina/domain/repositories/repositories.dart';
@@ -95,12 +98,44 @@ class _StationDetailPageState extends State<StationDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = context.watch<AuthBloc>().state;
+    final authenticated = authState is Authenticated ? authState : null;
+    final favState = context.watch<FavoritesBloc>().state;
+    final isLoggedIn = authenticated != null && !authenticated.isAnonymous;
+    final stationId = widget.station?.id ?? '';
+    final isFav = favState.isFavorite(stationId);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
           'Dettaglio distributore',
           style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
         ),
+        actions: [
+          if (isLoggedIn && stationId.isNotEmpty)
+            IconButton(
+              icon: Icon(
+                isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                color: isFav ? Colors.red : null,
+              ),
+              tooltip: isFav ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti',
+              onPressed: () {
+                final station = widget.station;
+                if (station == null) return;
+                if (isFav) {
+                  context.read<FavoritesBloc>().add(RemoveFavoriteEvent(
+                        userId: authenticated.userId,
+                        stationId: station.id,
+                      ));
+                } else {
+                  context.read<FavoritesBloc>().add(AddFavoriteEvent(
+                        userId: authenticated.userId,
+                        station: station,
+                      ));
+                }
+              },
+            ),
+        ],
       ),
       body: FutureBuilder<GasStation?>(
         future: _stationDetailsFuture,

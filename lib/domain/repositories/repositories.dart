@@ -1,5 +1,6 @@
 import 'package:mappa_prezzi_benzina/domain/entities/gas_station.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/price_update.dart';
+import 'package:mappa_prezzi_benzina/domain/entities/saved_station.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/user_location.dart';
 
 abstract class GasStationRepository {
@@ -10,9 +11,9 @@ abstract class GasStationRepository {
   Future<GasStation?> getStationDetails(String stationId);
   Future<void> submitPriceUpdate(PriceUpdate update);
   Future<List<PriceUpdate>> getPriceHistory(String stationId);
-  Future<void> addToFavorites(String userId, String stationId);
+  Future<void> addToFavorites(String userId, GasStation station);
   Future<void> removeFromFavorites(String userId, String stationId);
-  Future<List<String>> getFavorites(String userId);
+  Future<List<SavedStation>> getFavorites(String userId);
 }
 
 abstract class LocationRepository {
@@ -28,6 +29,7 @@ abstract class AuthRepository {
   Future<void> signInAnonymously();
   Future<void> signOut();
   String? getCurrentUserId();
+  bool isCurrentUserAnonymous();
   Stream<String?> authStateChanges();
   Future<void> resetPassword(String email);
 }

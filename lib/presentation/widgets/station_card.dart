@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/gas_station.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/user_location.dart';
+import 'package:mappa_prezzi_benzina/presentation/bloc/auth_bloc.dart';
+import 'package:mappa_prezzi_benzina/presentation/bloc/favorites_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
 
-// Colore per tipo carburante (benzina=verde, diesel=blu)
 Color _fuelColor(String fuelType) {
   final n = fuelType.toLowerCase();
   if (n.contains('benzina')) return const Color(0xFF4CAF50);
@@ -34,6 +36,13 @@ class StationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final authState = context.watch<AuthBloc>().state;
+    final favState = context.watch<FavoritesBloc>().state;
+
+    final isLoggedIn =
+        authState is Authenticated && !authState.isAnonymous;
+    final isFav = favState.isFavorite(station.id);
+
     return GestureDetector(
       onTap: onTap,
       child: Card(
@@ -52,9 +61,9 @@ class StationCard extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min, // non occupa più spazio del necessario
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // ── Nome + rating ──────────────────────────────────────────
+              // ── Nome + rating + cuore ──────────────────────────────────
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -94,6 +103,19 @@ class StationCard extends StatelessWidget {
                             ),
                           ),
                         ],
+                      ),
+                    ),
+                  ],
+                  if (isLoggedIn) ...[
+                    const SizedBox(width: 4),
+                    GestureDetector(
+                      onTap: () => _toggleFavorite(context, authState, isFav),
+                      child: Icon(
+                        isFav
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        size: 20,
+                        color: isFav ? Colors.red : AppTheme.textSecondaryColor,
                       ),
                     ),
                   ],
@@ -143,7 +165,6 @@ class StationCard extends StatelessWidget {
                   ),
                 )
               else
-                // SingleChildScrollView orizzontale senza altezza fissa
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
@@ -156,8 +177,8 @@ class StationCard extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: color.withOpacity(0.08),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                              color: color.withOpacity(0.3)),
+                          border:
+                              Border.all(color: color.withOpacity(0.3)),
                         ),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
@@ -203,6 +224,22 @@ class StationCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  void _toggleFavorite(
+      BuildContext context, AuthState authState, bool isFav) {
+    if (authState is! Authenticated) return;
+    if (isFav) {
+      context.read<FavoritesBloc>().add(RemoveFavoriteEvent(
+            userId: authState.userId,
+            stationId: station.id,
+          ));
+    } else {
+      context.read<FavoritesBloc>().add(AddFavoriteEvent(
+            userId: authState.userId,
+            station: station,
+          ));
+    }
   }
 
   String _timeAgo(DateTime dt) {

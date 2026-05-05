@@ -21,37 +21,38 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'demo-api-key',
-    appId: '1:000000000000:web:0000000000000000000000',
-    messagingSenderId: '000000000000',
-    projectId: 'mappa-prezzi-benzina-demo',
-    authDomain: 'mappa-prezzi-benzina-demo.firebaseapp.com',
-    storageBucket: 'mappa-prezzi-benzina-demo.appspot.com',
+    apiKey: 'AIzaSyAQcd83tU6mIA0ODokJN7JLo3bKbYMW_D4',
+    appId: '1:350570687665:web:13cc1c8cc46b05e1378690',
+    messagingSenderId: '350570687665',
+    projectId: 'mappa-prezzi-benzina',
+    authDomain: 'mappa-prezzi-benzina.firebaseapp.com',
+    storageBucket: 'mappa-prezzi-benzina.firebasestorage.app',
+    databaseURL: 'https://mappa-prezzi-benzina-default-rtdb.europe-west1.firebasedatabase.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'demo-api-key',
-    appId: '1:000000000000:android:0000000000000000000000',
-    messagingSenderId: '000000000000',
-    projectId: 'mappa-prezzi-benzina-demo',
-    storageBucket: 'mappa-prezzi-benzina-demo.appspot.com',
+    apiKey: 'AIzaSyAQcd83tU6mIA0ODokJN7JLo3bKbYMW_D4',
+    appId: '1:350570687665:android:13cc1c8cc46b05e1378690',
+    messagingSenderId: '350570687665',
+    projectId: 'mappa-prezzi-benzina',
+    storageBucket: 'mappa-prezzi-benzina.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'demo-api-key',
-    appId: '1:000000000000:ios:0000000000000000000000',
-    messagingSenderId: '000000000000',
-    projectId: 'mappa-prezzi-benzina-demo',
-    storageBucket: 'mappa-prezzi-benzina-demo.appspot.com',
+    apiKey: 'AIzaSyAQcd83tU6mIA0ODokJN7JLo3bKbYMW_D4',
+    appId: '1:350570687665:ios:13cc1c8cc46b05e1378690',
+    messagingSenderId: '350570687665',
+    projectId: 'mappa-prezzi-benzina',
+    storageBucket: 'mappa-prezzi-benzina.firebasestorage.app',
     iosBundleId: 'com.example.mappaPrezziBenzina',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'demo-api-key',
-    appId: '1:000000000000:ios:0000000000000000000000',
-    messagingSenderId: '000000000000',
-    projectId: 'mappa-prezzi-benzina-demo',
-    storageBucket: 'mappa-prezzi-benzina-demo.appspot.com',
+    apiKey: 'AIzaSyAQcd83tU6mIA0ODokJN7JLo3bKbYMW_D4',
+    appId: '1:350570687665:ios:13cc1c8cc46b05e1378690',
+    messagingSenderId: '350570687665',
+    projectId: 'mappa-prezzi-benzina',
+    storageBucket: 'mappa-prezzi-benzina.firebasestorage.app',
     iosBundleId: 'com.example.mappaPrezziBenzina',
   );
 }
