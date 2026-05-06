@@ -1,13 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:mappa_prezzi_benzina/domain/entities/gas_station.dart';
-import 'package:mappa_prezzi_benzina/domain/entities/user_location.dart';
-import 'package:mappa_prezzi_benzina/presentation/bloc/auth_bloc.dart';
-import 'package:mappa_prezzi_benzina/presentation/bloc/favorites_bloc.dart';
-import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
+import 'package:mappa_prezzi_benzina/core/services/real_cost_calculator.dart';
 import 'package:mappa_prezzi_benzina/core/services/service_locator.dart';
+import 'package:mappa_prezzi_benzina/domain/entities/gas_station.dart';
+import 'package:mappa_prezzi_benzina/domain/entities/refueling_log.dart';
+import 'package:mappa_prezzi_benzina/domain/entities/user_location.dart';
 import 'package:mappa_prezzi_benzina/domain/repositories/repositories.dart';
+import 'package:mappa_prezzi_benzina/presentation/bloc/auth_bloc.dart';
+import 'package:mappa_prezzi_benzina/presentation/bloc/dashboard_bloc.dart';
+import 'package:mappa_prezzi_benzina/presentation/bloc/favorites_bloc.dart';
+import 'package:mappa_prezzi_benzina/presentation/bloc/location_bloc.dart';
+import 'package:mappa_prezzi_benzina/presentation/bloc/map_bloc.dart';
+import 'package:mappa_prezzi_benzina/presentation/bloc/price_prediction_bloc.dart';
+import 'package:mappa_prezzi_benzina/presentation/bloc/user_profile_bloc.dart';
+import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
+import 'package:mappa_prezzi_benzina/presentation/widgets/price_trend_widget.dart';
+import 'package:mappa_prezzi_benzina/presentation/widgets/real_cost_widget.dart';
+import 'package:uuid/uuid.dart';
 
 // Mappa colori e icone per tipo carburante
 const _fuelMeta = {
@@ -79,21 +89,59 @@ class StationDetailPage extends StatefulWidget {
 
 class _StationDetailPageState extends State<StationDetailPage> {
   late Future<GasStation?> _stationDetailsFuture;
+  late final PricePredictionBloc _predictionBloc;
 
   @override
   void initState() {
     super.initState();
+    _predictionBloc = PricePredictionBloc(getIt<AnalyticsRepository>());
+
     final station = widget.station;
     if (station != null &&
         station.prices.isEmpty &&
         !station.id.startsWith('osm-')) {
       _stationDetailsFuture = getIt<GasStationRepository>()
           .getStationDetails(station.id)
-          .then((details) => details ?? station)
-          .catchError((_) => station);
+          .then((details) {
+            final s = details ?? station;
+            _dispatchPrediction(s);
+            return s;
+          })
+          .catchError((_) {
+            _dispatchPrediction(station);
+            return station;
+          });
     } else {
       _stationDetailsFuture = Future.value(station);
+      if (station != null && station.prices.isNotEmpty) {
+        WidgetsBinding.instance
+            .addPostFrameCallback((_) => _dispatchPrediction(station));
+      }
     }
+  }
+
+  void _dispatchPrediction(GasStation? station) {
+    if (station == null ||
+        station.prices.isEmpty ||
+        station.id.startsWith('osm-')) {
+      return;
+    }
+    final profile =
+        getIt<UserProfileBloc>().state.profileOrDefault(station.id);
+    final fuelType = profile.preferredFuelType;
+    final price =
+        station.prices[fuelType] ?? station.prices.values.first;
+    _predictionBloc.add(LoadPredictionEvent(
+      stationId: station.id,
+      fuelType: fuelType,
+      currentPrice: price,
+    ));
+  }
+
+  @override
+  void dispose() {
+    _predictionBloc.close();
+    super.dispose();
   }
 
   @override
@@ -105,66 +153,313 @@ class _StationDetailPageState extends State<StationDetailPage> {
     final stationId = widget.station?.id ?? '';
     final isFav = favState.isFavorite(stationId);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Dettaglio distributore',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          if (isLoggedIn && stationId.isNotEmpty)
-            IconButton(
-              icon: Icon(
-                isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                color: isFav ? Colors.red : null,
+    return BlocProvider.value(
+      value: _predictionBloc,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(
+            'Dettaglio distributore',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+          ),
+          actions: [
+            if (isLoggedIn && stationId.isNotEmpty)
+              IconButton(
+                icon: Icon(
+                  isFav
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                  color: isFav ? Colors.red : null,
+                ),
+                tooltip:
+                    isFav ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti',
+                onPressed: () {
+                  final station = widget.station;
+                  if (station == null) return;
+                  if (isFav) {
+                    context.read<FavoritesBloc>().add(RemoveFavoriteEvent(
+                          userId: authenticated.userId,
+                          stationId: station.id,
+                        ));
+                  } else {
+                    context.read<FavoritesBloc>().add(AddFavoriteEvent(
+                          userId: authenticated.userId,
+                          station: station,
+                        ));
+                  }
+                },
               ),
-              tooltip: isFav ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti',
-              onPressed: () {
-                final station = widget.station;
-                if (station == null) return;
-                if (isFav) {
-                  context.read<FavoritesBloc>().add(RemoveFavoriteEvent(
-                        userId: authenticated.userId,
-                        stationId: station.id,
-                      ));
-                } else {
-                  context.read<FavoritesBloc>().add(AddFavoriteEvent(
-                        userId: authenticated.userId,
-                        station: station,
-                      ));
-                }
-              },
-            ),
-        ],
+          ],
+        ),
+        floatingActionButton: isLoggedIn
+            ? FutureBuilder<GasStation?>(
+                future: _stationDetailsFuture,
+                builder: (context, snap) {
+                  final s = snap.data ?? widget.station;
+                  if (s == null || s.prices.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return FloatingActionButton.extended(
+                    onPressed: () => _showRefuelingSheet(context, s),
+                    icon: const Icon(Icons.local_gas_station_rounded),
+                    label: Text('Rifornimento',
+                        style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w600)),
+                  );
+                },
+              )
+            : null,
+        body: FutureBuilder<GasStation?>(
+          future: _stationDetailsFuture,
+          builder: (context, snapshot) {
+            final station = snapshot.data ?? widget.station;
+
+            if (station == null) {
+              return const Center(
+                  child: Text('Distributore non disponibile'));
+            }
+
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                station.prices.isEmpty) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            return SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _header(station),
+                  _prices(context, station),
+                  _details(station,
+                    context.read<LocationBloc>().state is LocationLoaded
+                      ? (context.read<LocationBloc>().state as LocationLoaded).location
+                      : widget.userLocation,
+                  ),
+                  _contacts(station),
+                  const SizedBox(height: 96),
+                ],
+              ),
+            );
+          },
+        ),
       ),
-      body: FutureBuilder<GasStation?>(
-        future: _stationDetailsFuture,
-        builder: (context, snapshot) {
-          final station = snapshot.data ?? widget.station;
+    );
+  }
 
-          if (station == null) {
-            return const Center(child: Text('Distributore non disponibile'));
-          }
+  // ─── Log rifornimento ──────────────────────────────────────────────────────
 
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              station.prices.isEmpty) {
-            return const Center(child: CircularProgressIndicator());
-          }
+  void _showRefuelingSheet(BuildContext context, GasStation station) {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is! Authenticated) return;
 
-          return SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _header(station),
-                _prices(station),
-                _details(station, widget.userLocation),
-                _contacts(station),
-                const SizedBox(height: 32),
-              ],
-            ),
-          );
-        },
+    final profile =
+        context.read<UserProfileBloc>().state.profileOrDefault(authState.userId);
+    String selectedFuel =
+        station.prices.containsKey(profile.preferredFuelType)
+            ? profile.preferredFuelType
+            : station.prices.keys.first;
+    final litersCtrl =
+        TextEditingController(text: profile.tankSize.toStringAsFixed(0));
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.surfaceColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheet) {
+            final price = station.prices[selectedFuel] ?? 0;
+            final liters =
+                double.tryParse(litersCtrl.text.replaceAll(',', '.')) ?? 0;
+            final total = price * liters;
+
+            // Prezzo medio zona per carburante selezionato
+            final mapState = context.read<MapBloc>().state;
+            final nearbyStations = mapState is MapLoaded
+                ? mapState.stations
+                : mapState is MapLoading
+                    ? mapState.stations
+                    : <GasStation>[];
+            final nearbyPrices = nearbyStations
+                .where((s) =>
+                    s.id != station.id && s.prices.containsKey(selectedFuel))
+                .map((s) => s.prices[selectedFuel]!)
+                .toList();
+            final areaAvg = nearbyPrices.isNotEmpty
+                ? RealCostCalculator.areaAverage(nearbyPrices)
+                : price;
+            final saved = (areaAvg - price) * liters;
+
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                  24, 20, 24,
+                  MediaQuery.of(ctx).viewInsets.bottom + 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Registra rifornimento',
+                    style: GoogleFonts.poppins(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimaryColor,
+                    ),
+                  ),
+                  Text(
+                    station.name,
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      color: AppTheme.textSecondaryColor,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text('Carburante',
+                      style: GoogleFonts.poppins(
+                          fontSize: 12, color: AppTheme.textSecondaryColor)),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    value: selectedFuel,
+                    decoration: _sheetInputDecoration(),
+                    style: GoogleFonts.poppins(
+                        fontSize: 13, color: AppTheme.textPrimaryColor),
+                    items: station.prices.keys
+                        .map((k) =>
+                            DropdownMenuItem(value: k, child: Text(k)))
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null) setSheet(() => selectedFuel = v);
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Litri riforniti',
+                      style: GoogleFonts.poppins(
+                          fontSize: 12, color: AppTheme.textSecondaryColor)),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    controller: litersCtrl,
+                    decoration:
+                        _sheetInputDecoration(hint: 'es. 40'),
+                    keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true),
+                    style: GoogleFonts.poppins(fontSize: 13),
+                    onChanged: (_) => setSheet(() {}),
+                  ),
+                  const SizedBox(height: 16),
+                  if (price > 0) ...[
+                    _sheetRow('Prezzo al litro',
+                        '€ ${price.toStringAsFixed(3)}'),
+                    const SizedBox(height: 4),
+                    _sheetRow('Totale stimato',
+                        '€ ${total.toStringAsFixed(2)}',
+                        bold: true),
+                    if (areaAvg > 0 && saved.abs() > 0.01) ...[
+                      const SizedBox(height: 4),
+                      _sheetRow(
+                        saved >= 0
+                            ? 'Risparmio vs zona'
+                            : 'Extra vs zona',
+                        saved >= 0
+                            ? '+ € ${saved.toStringAsFixed(2)}'
+                            : '- € ${saved.abs().toStringAsFixed(2)}',
+                        color: saved >= 0
+                            ? const Color(0xFF4CAF50)
+                            : Colors.orange[700]!,
+                      ),
+                    ],
+                    const SizedBox(height: 20),
+                  ],
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: liters > 0 && price > 0
+                          ? () {
+                              final log = RefuelingLog(
+                                id: const Uuid().v4(),
+                                userId: authState.userId,
+                                stationId: station.id,
+                                stationName: station.name,
+                                fuelType: selectedFuel,
+                                pricePerLiter: price,
+                                liters: liters,
+                                totalCost: total,
+                                savedVsArea: saved,
+                                areaAvgPrice: areaAvg,
+                                timestamp: DateTime.now(),
+                              );
+                              context
+                                  .read<DashboardBloc>()
+                                  .add(LogRefuelingEvent(log));
+                              Navigator.pop(ctx);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Rifornimento registrato — €${total.toStringAsFixed(2)}',
+                                    style: GoogleFonts.poppins(),
+                                  ),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          : null,
+                      child: Text(
+                        'Salva rifornimento',
+                        style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  InputDecoration _sheetInputDecoration({String? hint}) => InputDecoration(
+        hintText: hint,
+        hintStyle: GoogleFonts.poppins(
+            fontSize: 13, color: AppTheme.borderColor),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        filled: true,
+        fillColor: AppTheme.backgroundColor,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppTheme.borderColor),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppTheme.borderColor),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide:
+              const BorderSide(color: AppTheme.primaryColor, width: 1.5),
+        ),
+      );
+
+  Widget _sheetRow(String label, String value,
+      {bool bold = false, Color? color}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label,
+            style: GoogleFonts.poppins(
+                fontSize: 13, color: AppTheme.textSecondaryColor)),
+        Text(
+          value,
+          style: GoogleFonts.poppins(
+            fontSize: 13,
+            fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+            color: color ?? AppTheme.textPrimaryColor,
+          ),
+        ),
+      ],
     );
   }
 
@@ -219,7 +514,32 @@ class _StationDetailPageState extends State<StationDetailPage> {
 
   // ─── Prezzi ────────────────────────────────────────────────────────────────
 
-  Widget _prices(GasStation station) {
+  Widget _prices(BuildContext context, GasStation station) {
+    final profile =
+        context.read<UserProfileBloc>().state.profileOrDefault(station.id);
+
+    // Usa il GPS reale se disponibile, altrimenti il centro mappa passato dal widget
+    final locState = context.read<LocationBloc>().state;
+    final userLoc = locState is LocationLoaded ? locState.location : widget.userLocation;
+
+    // Prezzo medio zona per il carburante preferito
+    final mapState = context.read<MapBloc>().state;
+    final nearbyStations = mapState is MapLoaded
+        ? mapState.stations
+        : mapState is MapLoading
+            ? mapState.stations
+            : <GasStation>[];
+    final fuelType = profile.preferredFuelType;
+    final areaAvgPrice = RealCostCalculator.areaAverage(nearbyStations
+        .where((s) => s.id != station.id && s.prices.containsKey(fuelType))
+        .map((s) => s.prices[fuelType]!));
+
+    final fuelPrice = station.prices[fuelType];
+    final distanceKm = userLoc != null
+        ? station.getDistanceFromCoordinates(
+            userLoc.latitude, userLoc.longitude)
+        : 0.0;
+
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -230,9 +550,8 @@ class _StationDetailPageState extends State<StationDetailPage> {
           if (station.prices.isEmpty)
             _noPricesBox(station)
           else ...[
-            // Lista verticale — funziona con qualsiasi numero di carburanti
-            ..._sortedPrices(station.prices).map((entry) =>
-                _priceRow(entry.key, entry.value)),
+            ..._sortedPrices(station.prices)
+                .map((entry) => _priceRow(entry.key, entry.value)),
           ],
           if (station.lastUpdated != null) ...[
             const SizedBox(height: 12),
@@ -244,6 +563,23 @@ class _StationDetailPageState extends State<StationDetailPage> {
               ),
             ),
           ],
+
+          // Costo reale personalizzato
+          if (fuelPrice != null &&
+              profile.fuelConsumption > 0 &&
+              distanceKm > 0 &&
+              areaAvgPrice > 0)
+            RealCostWidget(
+              distanceKm: distanceKm,
+              fuelPrice: fuelPrice,
+              areaAvgPrice: areaAvgPrice,
+              profile: profile,
+              fuelType: fuelType,
+            ),
+
+          // Trend previsione prezzi
+          if (!station.id.startsWith('osm-') && station.prices.isNotEmpty)
+            const PriceTrendWidget(),
         ],
       ),
     );

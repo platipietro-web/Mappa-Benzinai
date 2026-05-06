@@ -38,6 +38,11 @@ class _MapPageState extends State<MapPage> {
   LatLng? _lastLoadedCenter;
 
   final Map<String, GlobalKey> _stationKeys = {};
+  final ScrollController _mobileScrollController = ScrollController();
+
+  // Stazione da evidenziare/centrare solo quando si naviga dai preferiti.
+  // null in tutti gli altri casi → il BlocListener non sposta la telecamera.
+  GasStation? _pendingHighlightStation;
 
   bool _searchActive = false;
   final TextEditingController _searchController = TextEditingController();
@@ -53,6 +58,16 @@ class _MapPageState extends State<MapPage> {
     // Ricarica preferiti al mount della mappa (gestisce il refresh pagina web
     // in cui l'auth è già ripristinata prima che il BlocListener in main scatti)
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Leggi stazione da evidenziare passata dai preferiti
+      final args =
+          ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      final pending = args?['highlightStation'] as GasStation?;
+      if (pending != null) {
+        setState(() => _pendingHighlightStation = pending);
+      }
+
+      // Ricarica preferiti (gestisce il refresh pagina web in cui
+      // l'auth è già ripristinata prima che il BlocListener in main scatti)
       final authState = context.read<AuthBloc>().state;
       if (authState is Authenticated && !authState.isAnonymous) {
         final favState = context.read<FavoritesBloc>().state;
@@ -107,7 +122,7 @@ class _MapPageState extends State<MapPage> {
   /// - seleziona stazione nel bloc
   /// - scrolla la lista alla card corrispondente
   /// - NON apre il dettaglio
-  void _onMarkerTap(GasStation station, List<GasStation> filteredStations) {
+  void _onMarkerTap(GasStation station) {
     context.read<MapBloc>().add(SelectStationEvent(station));
 
     // Centra mappa sul marker
@@ -115,17 +130,8 @@ class _MapPageState extends State<MapPage> {
       LatLng(station.latitude, station.longitude),
       _mapController.camera.zoom,
     );
-
-    // Scrolla la lista esattamente sulla card, indipendentemente dall'altezza
-    final key = _stationKeys[station.id];
-    if (key?.currentContext != null) {
-      Scrollable.ensureVisible(
-        key!.currentContext!,
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeInOut,
-        alignment: 0.1,
-      );
-    }
+    // Lo scroll nella lista è gestito dal BlocListener su MapBloc,
+    // che scatta dopo che il nuovo stato è propagato e la lista ricostruita.
   }
 
   /// Click sulla card nella lista:
@@ -162,20 +168,75 @@ class _MapPageState extends State<MapPage> {
       backgroundColor: AppTheme.backgroundColor,
       body: Stack(
         children: [
-          BlocListener<LocationBloc, LocationState>(
-            listener: (context, state) {
-              if (state is LocationLoaded) {
-                _lastLoadedCenter =
-                    LatLng(state.location.latitude, state.location.longitude);
-                _loadNearbyStations(state.location);
-              } else if (state is LocationPermissionDenied) {
-                _showLocationDeniedDialog();
-              } else if (state is LocationServiceDisabled) {
-                _showLocationDisabledDialog();
-              } else if (state is LocationError) {
-                _showErrorSnackbar(state.message);
-              }
-            },
+          MultiBlocListener(
+            listeners: [
+              BlocListener<LocationBloc, LocationState>(
+                listener: (context, state) {
+                  if (state is LocationLoaded) {
+                    _lastLoadedCenter = LatLng(
+                        state.location.latitude, state.location.longitude);
+                    _loadNearbyStations(state.location);
+                  } else if (state is LocationPermissionDenied) {
+                    _showLocationDeniedDialog();
+                  } else if (state is LocationServiceDisabled) {
+                    _showLocationDisabledDialog();
+                  } else if (state is LocationError) {
+                    _showErrorSnackbar(state.message);
+                  }
+                },
+              ),
+              // Gestisce due casi:
+              // 1. Tap marker: MapLoaded→MapLoaded con selectedStation cambiato
+              //    → scrolla la lista alla card selezionata
+              // 2. Navigazione dai preferiti: MapLoading→MapLoaded con
+              //    _pendingHighlightStation impostato → seleziona, centra camera.
+              //    Lo scroll avviene quando il caso 1 si attiva di conseguenza.
+              BlocListener<MapBloc, MapState>(
+                listenWhen: (prev, curr) {
+                  // Caso preferiti: caricamento completato
+                  if (_pendingHighlightStation != null &&
+                      prev is MapLoading &&
+                      curr is MapLoaded) {
+                    return true;
+                  }
+                  // Caso tap marker/selezione: selectedStation cambiato tra due MapLoaded
+                  if (prev is MapLoaded && curr is MapLoaded) {
+                    return curr.selectedStation != null &&
+                        prev.selectedStation?.id != curr.selectedStation?.id;
+                  }
+                  return false;
+                },
+                listener: (context, state) {
+                  final loaded = state as MapLoaded;
+
+                  // ── Preferiti: seleziona + camera move ──────────────────
+                  if (_pendingHighlightStation != null) {
+                    final station = _pendingHighlightStation!;
+                    setState(() => _pendingHighlightStation = null);
+                    context.read<MapBloc>().add(SelectStationEvent(station));
+                    try {
+                      _mapController.move(
+                        LatLng(station.latitude, station.longitude),
+                        14.0,
+                      );
+                    } catch (_) {}
+                    // Lo scroll scatterà quando SelectStationEvent emette
+                    // MapLoaded→MapLoaded (caso tap marker sopra)
+                    return;
+                  }
+
+                  // ── Tap marker / dopo SelectStationEvent preferiti ──────
+                  final stationId = loaded.selectedStation?.id;
+                  if (stationId == null) return;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    _scrollToStationInList(
+                      stationId,
+                      _filterAndSortStations(loaded.stations),
+                    );
+                  });
+                },
+              ),
+            ],
             child: BlocBuilder<MapBloc, MapState>(
               builder: (context, state) {
                 if (state is MapInitial ||
@@ -728,6 +789,7 @@ class _MapPageState extends State<MapPage> {
         children: [
           TileLayer(
             urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
           ),
           if (userLocation != null)
             MarkerLayer(markers: [
@@ -762,7 +824,7 @@ class _MapPageState extends State<MapPage> {
                 height: isSelected ? 48 : 40,
                 child: GestureDetector(
                   // Click marker → evidenzia nella lista, NON apre dettaglio
-                  onTap: () => _onMarkerTap(station, stations),
+                  onTap: () => _onMarkerTap(station),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     decoration: BoxDecoration(
@@ -857,6 +919,7 @@ class _MapPageState extends State<MapPage> {
             child: stations.isEmpty
                 ? _buildEmptyList()
                 : ListView.builder(
+                    controller: _mobileScrollController,
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
                     itemCount: stations.length,
@@ -1006,6 +1069,46 @@ class _MapPageState extends State<MapPage> {
     return relevant.reduce((a, b) => a < b ? a : b);
   }
 
+  /// Scrolla la lista alla card della stazione selezionata.
+  /// Desktop: lista verticale con GlobalKey + Scrollable.ensureVisible.
+  /// Mobile:  lista orizzontale con ScrollController + animateTo per indice.
+  /// Logica condivisa di scroll: desktop usa GlobalKey + ensureVisible,
+  /// mobile usa il controller della lista orizzontale + animateTo per indice.
+  /// Deve essere chiamato dentro addPostFrameCallback per garantire che il
+  /// BlocBuilder abbia già ricostruito la lista col nuovo stato.
+  void _scrollToStationInList(
+      String stationId, List<GasStation> visibleStations) {
+    final isDesktop =
+        MediaQuery.of(context).size.width >= _kDesktopBreakpoint;
+
+    if (isDesktop) {
+      final key = _stationKeys[stationId];
+      if (key?.currentContext != null) {
+        Scrollable.ensureVisible(
+          key!.currentContext!,
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeInOut,
+          alignment: 0.1,
+        );
+      }
+    } else {
+      if (!_mobileScrollController.hasClients) return;
+      final index = visibleStations.indexWhere((s) => s.id == stationId);
+      if (index < 0) return;
+      const cardWidth = 290.0; // 280 card + 10 padding destro
+      const leadingPadding = 12.0;
+      final target = (leadingPadding + index * cardWidth).clamp(
+        0.0,
+        _mobileScrollController.position.maxScrollExtent,
+      );
+      _mobileScrollController.animateTo(
+        target,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
   void _loadNearbyStations(UserLocation location) {
     context.read<MapBloc>().add(LoadNearbyStationsEvent(
           location: location,
@@ -1085,6 +1188,7 @@ class _MapPageState extends State<MapPage> {
     _searchController.dispose();
     _mapController.dispose();
     _listScrollController.dispose();
+    _mobileScrollController.dispose();
     super.dispose();
   }
 }

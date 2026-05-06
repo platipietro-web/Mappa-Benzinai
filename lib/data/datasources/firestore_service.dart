@@ -3,8 +3,15 @@ import 'package:mappa_prezzi_benzina/core/constants/app_constants.dart';
 import 'package:mappa_prezzi_benzina/core/errors/exceptions.dart';
 import 'package:mappa_prezzi_benzina/core/utils/logger.dart';
 import 'package:mappa_prezzi_benzina/data/models/gas_station_model.dart';
+import 'package:mappa_prezzi_benzina/data/models/price_snapshot_model.dart';
 import 'package:mappa_prezzi_benzina/data/models/price_update_model.dart' hide Timestamp;
+import 'package:mappa_prezzi_benzina/data/models/refueling_log_model.dart';
+import 'package:mappa_prezzi_benzina/domain/entities/price_snapshot.dart';
+import 'package:mappa_prezzi_benzina/domain/entities/refueling_log.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/saved_station.dart';
+import 'package:mappa_prezzi_benzina/domain/entities/user_profile.dart';
+import 'package:mappa_prezzi_benzina/domain/entities/vehicle_profile.dart';
+import 'package:uuid/uuid.dart';
 
 abstract class FirestoreService {
   Future<List<GasStationModel>> getNearbyStations(
@@ -28,6 +35,20 @@ abstract class FirestoreService {
   );
   Future<void> removeFavorite(String userId, String stationId);
   Future<List<SavedStation>> getFavorites(String userId);
+
+  // ── Profilo utente ─────────────────────────────────────────────────────────
+  Future<UserProfile?> getUserProfile(String userId);
+  Future<void> saveUserProfile(UserProfile profile);
+
+  // ── Storico prezzi ─────────────────────────────────────────────────────────
+  Future<void> savePriceSnapshot(
+      String stationId, String fuelType, double price);
+  Future<List<PriceSnapshot>> getPriceSnapshots(
+      String stationId, String fuelType);
+
+  // ── Log rifornimenti ───────────────────────────────────────────────────────
+  Future<void> addRefuelingLog(RefuelingLogModel log);
+  Future<List<RefuelingLog>> getRefuelingLogs(String userId);
 }
 
 class FirestoreServiceImpl implements FirestoreService {
@@ -229,6 +250,173 @@ class FirestoreServiceImpl implements FirestoreService {
     } catch (e) {
       logError('Firestore: error fetching favorites', e);
       throw DatabaseException(message: 'Impossibile caricare i preferiti');
+    }
+  }
+
+  // ── Profilo utente ──────────────────────────────────────────────────────────
+
+  @override
+  Future<UserProfile?> getUserProfile(String userId) async {
+    try {
+      final doc = await _firestore
+          .collection(AppConstants.usersCollection)
+          .doc(userId)
+          .get();
+      if (!doc.exists || doc.data() == null) return null;
+      final d = doc.data()!;
+
+      List<VehicleProfile> vehicles = [];
+      String? activeVehicleId;
+
+      if (d.containsKey('vehicles') && d['vehicles'] is List) {
+        // Formato nuovo: lista veicoli
+        final rawList = d['vehicles'] as List<dynamic>;
+        vehicles = rawList
+            .whereType<Map<String, dynamic>>()
+            .map(VehicleProfile.fromMap)
+            .toList();
+        activeVehicleId = d['activeVehicleId'] as String?;
+      } else if (d.containsKey('fuelConsumption')) {
+        // Migrazione formato legacy → crea un veicolo di default
+        final legacy = VehicleProfile(
+          id: const Uuid().v4(),
+          name: 'Il mio veicolo',
+          fuelConsumption:
+              (d['fuelConsumption'] as num?)?.toDouble() ?? 10.0,
+          tankSize: (d['tankSize'] as num?)?.toDouble() ?? 50.0,
+          preferredFuelType:
+              d['preferredFuelType'] as String? ?? 'Benzina',
+        );
+        vehicles = [legacy];
+        activeVehicleId = legacy.id;
+      }
+
+      return UserProfile(
+        userId: userId,
+        email: d['email'] as String?,
+        vehicles: vehicles,
+        activeVehicleId: activeVehicleId,
+      );
+    } catch (e) {
+      logError('Firestore: error fetching user profile', e);
+      return null;
+    }
+  }
+
+  @override
+  Future<void> saveUserProfile(UserProfile profile) async {
+    try {
+      await _firestore
+          .collection(AppConstants.usersCollection)
+          .doc(profile.userId)
+          .set({
+        'vehicles': profile.vehicles.map((v) => v.toMap()).toList(),
+        'activeVehicleId': profile.activeVehicleId,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      logError('Firestore: error saving user profile', e);
+      throw DatabaseException(message: 'Impossibile salvare il profilo');
+    }
+  }
+
+  // ── Storico prezzi ──────────────────────────────────────────────────────────
+
+  @override
+  Future<void> savePriceSnapshot(
+      String stationId, String fuelType, double price) async {
+    try {
+      // DocID = fuelType_YYYY-MM-DD → deduplicazione naturale, nessun indice
+      final today = DateTime.now();
+      final dateStr =
+          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      // Sanitizza fuelType per usarlo come parte del docId
+      final safeType = fuelType.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
+      final docId = '${safeType}_$dateStr';
+
+      final ref = _firestore
+          .collection(AppConstants.stationsCollection)
+          .doc(stationId)
+          .collection(AppConstants.priceHistoryCollection)
+          .doc(docId);
+
+      final existing = await ref.get();
+      if (existing.exists) return; // già salvato oggi per questo carburante
+
+      final model = PriceSnapshotModel(
+        stationId: stationId,
+        fuelType: fuelType,
+        price: price,
+        timestamp: DateTime.now(),
+      );
+      await ref.set(model.toFirestore());
+    } catch (e) {
+      logError('Firestore: error saving price snapshot', e);
+    }
+  }
+
+  @override
+  Future<List<PriceSnapshot>> getPriceSnapshots(
+      String stationId, String fuelType) async {
+    try {
+      // Nessun orderBy né filtro lato Firestore: evita indici composti e
+      // permission-denied su Firestore Web. Ordinamento e filtraggio client-side.
+      final snapshot = await _firestore
+          .collection(AppConstants.stationsCollection)
+          .doc(stationId)
+          .collection(AppConstants.priceHistoryCollection)
+          .limit(90)
+          .get();
+
+      final results = snapshot.docs
+          .map((doc) =>
+              PriceSnapshotModel.fromFirestore(doc.data(), stationId))
+          .where((s) => s.fuelType == fuelType)
+          .toList()
+        ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+      // Tieni solo gli ultimi 60 punti dopo l'ordinamento
+      return results.length > 60 ? results.sublist(results.length - 60) : results;
+    } catch (e) {
+      logError('Firestore: error fetching price snapshots', e);
+      return [];
+    }
+  }
+
+  // ── Log rifornimenti ────────────────────────────────────────────────────────
+
+  @override
+  Future<void> addRefuelingLog(RefuelingLogModel log) async {
+    try {
+      await _firestore
+          .collection(AppConstants.usersCollection)
+          .doc(log.userId)
+          .collection(AppConstants.refuelingLogsCollection)
+          .add(log.toFirestore());
+    } catch (e) {
+      logError('Firestore: error adding refueling log', e);
+      throw DatabaseException(message: 'Impossibile salvare il rifornimento');
+    }
+  }
+
+  @override
+  Future<List<RefuelingLog>> getRefuelingLogs(String userId) async {
+    try {
+      final snapshot = await _firestore
+          .collection(AppConstants.usersCollection)
+          .doc(userId)
+          .collection(AppConstants.refuelingLogsCollection)
+          .orderBy('timestamp', descending: true)
+          .limit(100)
+          .get();
+
+      return snapshot.docs
+          .map((doc) =>
+              RefuelingLogModel.fromFirestore(doc.data(), doc.id))
+          .toList();
+    } catch (e) {
+      logError('Firestore: error fetching refueling logs', e);
+      throw DatabaseException(
+          message: 'Impossibile caricare i rifornimenti');
     }
   }
 }

@@ -10,18 +10,22 @@ import 'package:mappa_prezzi_benzina/data/datasources/fuel_price_api.dart';
 import 'package:mappa_prezzi_benzina/data/datasources/location_service.dart';
 
 // Repositories
+import 'package:mappa_prezzi_benzina/data/repositories/analytics_repository_impl.dart';
 import 'package:mappa_prezzi_benzina/data/repositories/auth_repository_impl.dart';
 import 'package:mappa_prezzi_benzina/data/repositories/gas_station_repository_impl.dart';
 import 'package:mappa_prezzi_benzina/data/repositories/location_repository_impl.dart';
+import 'package:mappa_prezzi_benzina/data/repositories/user_profile_repository_impl.dart';
 
 // Domain
 import 'package:mappa_prezzi_benzina/domain/repositories/repositories.dart';
 
 // BLoCs
 import 'package:mappa_prezzi_benzina/presentation/bloc/auth_bloc.dart';
+import 'package:mappa_prezzi_benzina/presentation/bloc/dashboard_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/favorites_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/location_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/map_bloc.dart';
+import 'package:mappa_prezzi_benzina/presentation/bloc/user_profile_bloc.dart';
 
 final getIt = GetIt.instance;
 
@@ -52,6 +56,12 @@ void setupServiceLocator() {
   getIt.registerSingleton<LocationRepository>(
     LocationRepositoryImpl(getIt<LocationService>()),
   );
+  getIt.registerSingleton<UserProfileRepository>(
+    UserProfileRepositoryImpl(getIt<FirestoreService>()),
+  );
+  getIt.registerSingleton<AnalyticsRepository>(
+    AnalyticsRepositoryImpl(getIt<FirestoreService>()),
+  );
 
   // BLoCs
   getIt.registerSingleton<AuthBloc>(AuthBloc(getIt<AuthRepository>()));
@@ -60,4 +70,8 @@ void setupServiceLocator() {
   getIt.registerSingleton<LocationBloc>(
       LocationBloc(getIt<LocationRepository>()));
   getIt.registerSingleton<MapBloc>(MapBloc(getIt<GasStationRepository>()));
+  getIt.registerSingleton<UserProfileBloc>(
+      UserProfileBloc(getIt<UserProfileRepository>()));
+  getIt.registerSingleton<DashboardBloc>(
+      DashboardBloc(getIt<AnalyticsRepository>()));
 }

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:mappa_prezzi_benzina/core/constants/app_constants.dart';
+import 'package:mappa_prezzi_benzina/domain/entities/gas_station.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/saved_station.dart';
+import 'package:mappa_prezzi_benzina/domain/entities/user_location.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/auth_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/favorites_bloc.dart';
+import 'package:mappa_prezzi_benzina/presentation/bloc/map_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
 
 Color _fuelColor(String fuelType) {
@@ -107,10 +111,35 @@ class FavoritesPage extends StatelessWidget {
   }
 
   void _openOnMap(BuildContext context, SavedStation s) {
+    // Converti SavedStation → GasStation per il MapBloc
+    final gasStation = GasStation(
+      id: s.id,
+      name: s.name,
+      address: s.address,
+      latitude: s.latitude,
+      longitude: s.longitude,
+      prices: s.prices,
+      brand: s.brand,
+    );
+
+    // Carica le stazioni vicine alla preferita (pre-popola la lista)
+    context.read<MapBloc>().add(LoadNearbyStationsEvent(
+      location: UserLocation(
+        latitude: s.latitude,
+        longitude: s.longitude,
+        timestamp: DateTime.now(),
+      ),
+      radiusKm: AppConstants.stationSearchRadius,
+    ));
+
+    // La selezione, il camera-move e lo scroll avvengono nella map page
+    // tramite _pendingHighlightStation, così "Cerca in questa zona" non
+    // viene influenzato da selezioni precedenti.
     Navigator.pushNamedAndRemoveUntil(
       context,
       '/map',
       (route) => false,
+      arguments: {'highlightStation': gasStation},
     );
   }
 }
