@@ -11,8 +11,10 @@ import 'package:mappa_prezzi_benzina/domain/entities/user_location.dart';
 class FuelTypes {
   static const benzina = 'Benzina';
   static const benzinaSp100 = 'Benzina Speciale 100';
+  static const benzinaServita = 'Benzina Servita';
   static const diesel = 'Diesel';
   static const dieselPlus = 'Diesel+';
+  static const dieselServito = 'Diesel Servito';
   static const dieselHvo = 'Diesel HVO';
   static const hvo = 'HVO';
   static const gpl = 'GPL';
@@ -24,8 +26,10 @@ class FuelTypes {
   static const all = [
     benzina,
     benzinaSp100,
+    benzinaServita,
     diesel,
     dieselPlus,
+    dieselServito,
     dieselHvo,
     hvo,
     gpl,
@@ -194,22 +198,9 @@ class FuelPriceApiImpl implements FuelPriceApi {
         final fuelType = fuelEntry.key;
         final prices = fuelEntry.value..sort(); // ordina dal più basso
 
-        if (prices.length == 1) {
-          // Un solo prezzo → salvalo normalmente
-          stationPrices[fuelType] = prices.first;
-        } else {
-          // Più prezzi per lo stesso tipo base → distingui normale vs speciale
-          // Il prezzo più basso = normale (self-service)
-          // Il prezzo più alto  = speciale/premium (servito)
-          stationPrices[fuelType] = prices.first; // il più basso
-
-          // Mappa il tipo base al suo equivalente speciale
-          final specialType = _specialVariant(fuelType);
-          if (specialType != null) {
-            // Usa il prezzo più alto come speciale
-            stationPrices[specialType] = prices.last;
-          }
-        }
+        // In presenza di più prezzi per lo stesso tipo canonico
+        // (es. duplicati nel CSV) teniamo solo il minimo (self-service).
+        stationPrices[fuelType] = prices.first;
       }
 
       if (stationPrices.isNotEmpty) {
@@ -218,13 +209,6 @@ class FuelPriceApiImpl implements FuelPriceApi {
     }
 
     return _ParsedPrices(result, latestDates);
-  }
-
-  /// Ritorna il nome "speciale" corrispondente al tipo base, o null se non applicabile
-  String? _specialVariant(String fuelType) {
-    if (fuelType == FuelTypes.benzina) return FuelTypes.benzinaSp100;
-    if (fuelType == FuelTypes.diesel) return FuelTypes.dieselPlus;
-    return null; // GPL, Metano, ecc. non hanno variante speciale
   }
 
   List<GasStationModel> _parseStationsCsv(
@@ -309,14 +293,16 @@ class FuelPriceApiImpl implements FuelPriceApi {
     final n = cleaned.toLowerCase();
 
     // ── Benzina Speciale 100 — nomi brand-specifici nel CSV MIMIT ──────────
-    // ENI/Agip: "Blue Super", "Blue Super+"
-    // Q8:       "Hi-Q Perform+", "HiQ Perform+", "Hi-Q 100"
-    // Shell:    "V-Power" (senza diesel nel nome)
-    // Esso:     "Supreme+" (senza gasolio nel nome)
-    // IP:       "Optimo", "Racing Fuel"
-    // Tamoil:   "Excellium Benzina", "Excellium 100"
-    // Generici: "Benzina 100", "Benzina Super", "Benzina Premium", "Benzina Speciale"
     if (_isBenzinaSp100(n)) return FuelTypes.benzinaSp100;
+
+    // ── Benzina/Diesel Servita — prezzo pieno servizio (NON carburante premium)
+    // Deve venire PRIMA dei check generici benzina/diesel per evitare
+    // che "Benzina Servita" venga classificata come benzina normale.
+    if (n.contains('servit')) {
+      if (n.contains('benzina')) return FuelTypes.benzinaServita;
+      if (n.contains('gasolio') || n.contains('diesel')) return FuelTypes.dieselServito;
+      return null; // "servito" senza tipo carburante → ignora
+    }
 
     // ── Benzina base ───────────────────────────────────────────────────────
     if (n.contains('benzina')) return FuelTypes.benzina;
@@ -327,12 +313,6 @@ class FuelPriceApiImpl implements FuelPriceApi {
     }
 
     // ── Diesel+ — nomi brand-specifici nel CSV MIMIT ───────────────────────
-    // ENI/Agip: "Blue Diesel", "Blue Diesel+"
-    // Q8:       "Hi-Q Diesel", "HiQ Diesel"
-    // Shell:    "V-Power Diesel"
-    // Esso:     "Supreme Diesel"
-    // IP:       "Extraverde", "Excellium Diesel"
-    // Generici: "Gasolio Speciale", "Diesel Premium", "Diesel+"
     if (_isDieselPlus(n)) return FuelTypes.dieselPlus;
 
     // ── Diesel base ────────────────────────────────────────────────────────

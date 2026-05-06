@@ -13,11 +13,12 @@ abstract class AuthEvent extends Equatable {
 class SignUpEvent extends AuthEvent {
   final String email;
   final String password;
+  final String? displayName;
 
-  const SignUpEvent({required this.email, required this.password});
+  const SignUpEvent({required this.email, required this.password, this.displayName});
 
   @override
-  List<Object?> get props => [email, password];
+  List<Object?> get props => [email, password, displayName];
 }
 
 class SignInEvent extends AuthEvent {
@@ -35,7 +36,11 @@ class SignInAnonymouslyEvent extends AuthEvent {
 }
 
 class SignOutEvent extends AuthEvent {
-  const SignOutEvent();
+  final bool signUpMode;
+  const SignOutEvent({this.signUpMode = false});
+
+  @override
+  List<Object?> get props => [signUpMode];
 }
 
 class AuthStatusChangedEvent extends AuthEvent {
@@ -83,7 +88,11 @@ class Authenticated extends AuthState {
 }
 
 class Unauthenticated extends AuthState {
-  const Unauthenticated();
+  final bool signUpMode;
+  const Unauthenticated({this.signUpMode = false});
+
+  @override
+  List<Object?> get props => [signUpMode];
 }
 
 class AuthError extends AuthState {
@@ -119,7 +128,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     emit(const AuthLoading());
     try {
-      await _authRepository.signUpWithEmail(event.email, event.password);
+      await _authRepository.signUpWithEmail(
+        event.email,
+        event.password,
+        displayName: event.displayName,
+      );
       final userId = _authRepository.getCurrentUserId();
       if (userId != null) {
         emit(Authenticated(userId: userId));
@@ -168,7 +181,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(const AuthLoading());
     try {
       await _authRepository.signOut();
-      emit(const Unauthenticated());
+      emit(Unauthenticated(signUpMode: event.signUpMode));
     } catch (e) {
       emit(AuthError(e.toString()));
     }

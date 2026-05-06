@@ -79,6 +79,7 @@ class MyApp extends StatelessWidget {
           child: BlocBuilder<AuthBloc, AuthState>(
             builder: (context, state) {
               if (state is Authenticated) return const MapPage();
+              if (state is Unauthenticated) return AuthPage(initialSignUp: state.signUpMode);
               return const AuthPage();
             },
           ),

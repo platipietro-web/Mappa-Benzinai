@@ -31,8 +31,6 @@ class ProfilePage extends StatelessWidget {
 
     final isAnonymous =
         authState is Authenticated ? authState.isAnonymous : true;
-    final userId =
-        authState is Authenticated ? authState.userId : null;
 
     context.watch<UserProfileBloc>();
 
@@ -88,15 +86,22 @@ class ProfilePage extends StatelessWidget {
                 color: AppTheme.textPrimaryColor,
               ),
             ),
-            if (!isAnonymous && userId != null) ...[
+            if (!isAnonymous) ...[
               const SizedBox(height: 4),
-              Text(
-                userId,
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  color: AppTheme.textSecondaryColor,
-                ),
-              ),
+              Builder(builder: (context) {
+                final profile = context.watch<UserProfileBloc>().state.profile;
+                final name = profile?.displayName?.isNotEmpty == true
+                    ? profile!.displayName!
+                    : profile?.email ?? '';
+                if (name.isEmpty) return const SizedBox.shrink();
+                return Text(
+                  name,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    color: AppTheme.textSecondaryColor,
+                  ),
+                );
+              }),
             ],
 
             const SizedBox(height: 32),
@@ -126,7 +131,7 @@ class ProfilePage extends StatelessWidget {
               const SizedBox(height: 12),
             ],
 
-            // Sezione ospite: invito a registrarsi
+            // Sezione ospite: invito a registrarsi o accedere
             if (isAnonymous) ...[
               Container(
                 padding: const EdgeInsets.all(16),
@@ -156,23 +161,45 @@ class ProfilePage extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Registrati per salvare le tue stazioni preferite e accedere alla tua area personale.',
+                      'Registrati per salvare le stazioni preferite e accedere alla tua area personale.',
                       style: GoogleFonts.poppins(
                         fontSize: 13,
                         color: AppTheme.textSecondaryColor,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          context.read<AuthBloc>().add(const SignOutEvent());
-                        },
-                        child: Text('Crea un account',
-                            style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.w600)),
-                      ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () {
+                              Navigator.of(context)
+                                  .popUntil((r) => r.isFirst);
+                              context
+                                  .read<AuthBloc>()
+                                  .add(const SignOutEvent());
+                            },
+                            child: Text('Accedi',
+                                style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w600)),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              Navigator.of(context)
+                                  .popUntil((r) => r.isFirst);
+                              context.read<AuthBloc>().add(
+                                    const SignOutEvent(signUpMode: true),
+                                  );
+                            },
+                            child: Text('Registrati',
+                                style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w600)),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

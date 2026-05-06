@@ -28,7 +28,7 @@ abstract class LocationRepository {
 }
 
 abstract class AuthRepository {
-  Future<void> signUpWithEmail(String email, String password);
+  Future<void> signUpWithEmail(String email, String password, {String? displayName});
   Future<void> signInWithEmail(String email, String password);
   Future<void> signInAnonymously();
   Future<void> signOut();

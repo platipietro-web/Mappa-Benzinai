@@ -11,13 +11,28 @@ import 'package:mappa_prezzi_benzina/presentation/bloc/map_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
 
 Color _fuelColor(String fuelType) {
+  const exact = {
+    'benzina speciale 100': Color(0xFF388E3C),
+    'benzina servita':      Color(0xFF8BC34A),
+    'benzina':              Color(0xFF4CAF50),
+    'diesel+':              Color(0xFF1976D2),
+    'diesel servito':       Color(0xFF42A5F5),
+    'diesel hvo':           Color(0xFF0D47A1),
+    'diesel':               Color(0xFF2196F3),
+    'hvo':                  Color(0xFF1B5E20),
+    'gpl':                  Color(0xFFFF9800),
+    'metano':               Color(0xFF9C27B0),
+    'gnc':                  Color(0xFF7B1FA2),
+    'gnl':                  Color(0xFF4A148C),
+    'idrogeno':             Color(0xFF00BCD4),
+  };
   final n = fuelType.toLowerCase();
-  if (n.contains('benzina')) return const Color(0xFF4CAF50);
-  if (n.contains('diesel') || n.contains('gasolio')) return const Color(0xFF2196F3);
-  if (n.contains('hvo')) return const Color(0xFF00796B);
-  if (n.contains('gpl')) return const Color(0xFFFF9800);
-  if (n.contains('metano') || n.contains('gnc') || n.contains('gnl')) return const Color(0xFF9C27B0);
-  if (n.contains('idrogeno')) return const Color(0xFF00BCD4);
+  // Chiave più lunga prima per match specifico
+  final sortedKeys = exact.keys.toList()
+    ..sort((a, b) => b.length.compareTo(a.length));
+  for (final key in sortedKeys) {
+    if (n.contains(key)) return exact[key]!;
+  }
   return const Color(0xFF607D8B);
 }
 

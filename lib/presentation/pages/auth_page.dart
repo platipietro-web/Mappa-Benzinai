@@ -5,21 +5,38 @@ import 'package:mappa_prezzi_benzina/presentation/bloc/auth_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
 
 class AuthPage extends StatefulWidget {
-  const AuthPage({Key? key}) : super(key: key);
+  final bool initialSignUp;
+  const AuthPage({Key? key, this.initialSignUp = false}) : super(key: key);
 
   @override
   State<AuthPage> createState() => _AuthPageState();
 }
 
 class _AuthPageState extends State<AuthPage> {
-  bool _isSignUp = false;
+  late bool _isSignUp;
+  final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
 
   @override
+  void initState() {
+    super.initState();
+    _isSignUp = widget.initialSignUp;
+  }
+
+  @override
+  void didUpdateWidget(AuthPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialSignUp != oldWidget.initialSignUp) {
+      setState(() => _isSignUp = widget.initialSignUp);
+    }
+  }
+
+  @override
   void dispose() {
+    _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -27,9 +44,14 @@ class _AuthPageState extends State<AuthPage> {
   }
 
   void _submit(BuildContext context) {
+    final name = _nameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
+    if (_isSignUp && name.isEmpty) {
+      _showSnackbar(context, 'Inserisci nome e cognome');
+      return;
+    }
     if (email.isEmpty || !email.contains('@')) {
       _showSnackbar(context, 'Inserisci un\'email valida');
       return;
@@ -44,7 +66,9 @@ class _AuthPageState extends State<AuthPage> {
     }
 
     if (_isSignUp) {
-      context.read<AuthBloc>().add(SignUpEvent(email: email, password: password));
+      context.read<AuthBloc>().add(
+            SignUpEvent(email: email, password: password, displayName: name),
+          );
     } else {
       context.read<AuthBloc>().add(SignInEvent(email: email, password: password));
     }
@@ -154,14 +178,29 @@ class _AuthPageState extends State<AuthPage> {
                   ),
                   const SizedBox(height: 24),
 
+                  // Nome e cognome (solo registrazione)
+                  if (_isSignUp) ...[
+                    TextField(
+                      controller: _nameController,
+                      enabled: !isLoading,
+                      keyboardType: TextInputType.name,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(
+                        hintText: 'Nome e cognome',
+                        prefixIcon: Icon(Icons.badge_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
                   // Email
                   TextField(
                     controller: _emailController,
                     enabled: !isLoading,
                     keyboardType: TextInputType.emailAddress,
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       hintText: 'Indirizzo email',
-                      prefixIcon: const Icon(Icons.email_outlined),
+                      prefixIcon: Icon(Icons.email_outlined),
                     ),
                   ),
                   const SizedBox(height: 16),

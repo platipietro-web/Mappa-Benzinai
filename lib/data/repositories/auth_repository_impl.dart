@@ -10,13 +10,15 @@ class AuthRepositoryImpl implements AuthRepository {
   AuthRepositoryImpl(this._authService, this._firestoreService);
 
   @override
-  Future<void> signUpWithEmail(String email, String password) async {
+  Future<void> signUpWithEmail(String email, String password, {String? displayName}) async {
     try {
       final credential = await _authService.signUpWithEmail(email, password);
-      // Crea profilo utente su Firestore dopo la registrazione
       final uid = credential?.user?.uid;
       if (uid != null) {
-        await _firestoreService.createUserProfile(uid, email);
+        if (displayName != null && displayName.isNotEmpty) {
+          await credential?.user?.updateDisplayName(displayName);
+        }
+        await _firestoreService.createUserProfile(uid, email, displayName: displayName);
       }
     } catch (e) {
       logError('Error in signUpWithEmail repository', e);

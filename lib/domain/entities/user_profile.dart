@@ -4,12 +4,14 @@ import 'package:mappa_prezzi_benzina/domain/entities/vehicle_profile.dart';
 class UserProfile extends Equatable {
   final String userId;
   final String? email;
+  final String? displayName;
   final List<VehicleProfile> vehicles;
   final String? activeVehicleId;
 
   const UserProfile({
     required this.userId,
     this.email,
+    this.displayName,
     this.vehicles = const [],
     this.activeVehicleId,
   });
@@ -32,16 +34,18 @@ class UserProfile extends Equatable {
 
   UserProfile copyWith({
     String? email,
+    String? displayName,
     List<VehicleProfile>? vehicles,
     String? activeVehicleId,
   }) =>
       UserProfile(
         userId: userId,
         email: email ?? this.email,
+        displayName: displayName ?? this.displayName,
         vehicles: vehicles ?? this.vehicles,
         activeVehicleId: activeVehicleId ?? this.activeVehicleId,
       );
 
   @override
-  List<Object?> get props => [userId, email, vehicles, activeVehicleId];
+  List<Object?> get props => [userId, email, displayName, vehicles, activeVehicleId];
 }

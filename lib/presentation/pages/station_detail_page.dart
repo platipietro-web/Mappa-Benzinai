@@ -21,17 +21,19 @@ import 'package:uuid/uuid.dart';
 
 // Mappa colori e icone per tipo carburante
 const _fuelMeta = {
-  'Benzina':        {'color': 0xFF4CAF50, 'icon': Icons.local_gas_station},
+  'Benzina':              {'color': 0xFF4CAF50, 'icon': Icons.local_gas_station},
   'Benzina Speciale 100': {'color': 0xFF388E3C, 'icon': Icons.local_gas_station},
-  'Diesel':         {'color': 0xFF2196F3, 'icon': Icons.local_gas_station},
-  'Diesel+':        {'color': 0xFF1976D2, 'icon': Icons.local_gas_station},
-  'Diesel HVO':     {'color': 0xFF0D47A1, 'icon': Icons.eco},
-  'HVO':            {'color': 0xFF1B5E20, 'icon': Icons.eco},
-  'GPL':            {'color': 0xFFFF9800, 'icon': Icons.bubble_chart},
-  'Metano':         {'color': 0xFF9C27B0, 'icon': Icons.air},
-  'GNC':            {'color': 0xFF7B1FA2, 'icon': Icons.air},
-  'GNL':            {'color': 0xFF4A148C, 'icon': Icons.air},
-  'Idrogeno':       {'color': 0xFF00BCD4, 'icon': Icons.bolt},
+  'Benzina Servita':      {'color': 0xFF8BC34A, 'icon': Icons.local_gas_station},
+  'Diesel':               {'color': 0xFF2196F3, 'icon': Icons.local_gas_station},
+  'Diesel+':              {'color': 0xFF1976D2, 'icon': Icons.local_gas_station},
+  'Diesel Servito':       {'color': 0xFF42A5F5, 'icon': Icons.local_gas_station},
+  'Diesel HVO':           {'color': 0xFF0D47A1, 'icon': Icons.eco},
+  'HVO':                  {'color': 0xFF1B5E20, 'icon': Icons.eco},
+  'GPL':                  {'color': 0xFFFF9800, 'icon': Icons.bubble_chart},
+  'Metano':               {'color': 0xFF9C27B0, 'icon': Icons.air},
+  'GNC':                  {'color': 0xFF7B1FA2, 'icon': Icons.air},
+  'GNL':                  {'color': 0xFF4A148C, 'icon': Icons.air},
+  'Idrogeno':             {'color': 0xFF00BCD4, 'icon': Icons.bolt},
 };
 
 Color _fuelColor(String fuelType) {
@@ -54,8 +56,8 @@ IconData _fuelIcon(String fuelType) {
 
 // Ordine di visualizzazione preferito
 const _fuelOrder = [
-  'Benzina', 'Benzina Speciale 100',
-  'Diesel', 'Diesel+', 'Diesel HVO', 'HVO',
+  'Benzina', 'Benzina Speciale 100', 'Benzina Servita',
+  'Diesel', 'Diesel+', 'Diesel Servito', 'Diesel HVO', 'HVO',
   'GPL', 'Metano', 'GNC', 'GNL', 'Idrogeno',
 ];
 

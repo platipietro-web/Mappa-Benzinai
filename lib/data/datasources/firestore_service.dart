@@ -22,7 +22,7 @@ abstract class FirestoreService {
   Future<GasStationModel?> getStationById(String stationId);
   Future<void> addPriceUpdate(PriceUpdateModel update);
   Future<List<PriceUpdateModel>> getPriceUpdatesForStation(String stationId);
-  Future<void> createUserProfile(String userId, String email);
+  Future<void> createUserProfile(String userId, String email, {String? displayName});
   Future<void> addFavorite(
     String userId,
     String stationId,
@@ -158,7 +158,7 @@ class FirestoreServiceImpl implements FirestoreService {
   }
 
   @override
-  Future<void> createUserProfile(String userId, String email) async {
+  Future<void> createUserProfile(String userId, String email, {String? displayName}) async {
     try {
       await _firestore
           .collection(AppConstants.usersCollection)
@@ -166,9 +166,9 @@ class FirestoreServiceImpl implements FirestoreService {
           .set({
         'email': email,
         'createdAt': FieldValue.serverTimestamp(),
+        if (displayName != null && displayName.isNotEmpty) 'displayName': displayName,
       }, SetOptions(merge: true));
     } catch (e) {
-      // Non blocca il signup se fallisce
       logError('Firestore: error creating user profile', e);
     }
   }
@@ -294,6 +294,7 @@ class FirestoreServiceImpl implements FirestoreService {
       return UserProfile(
         userId: userId,
         email: d['email'] as String?,
+        displayName: d['displayName'] as String?,
         vehicles: vehicles,
         activeVehicleId: activeVehicleId,
       );
@@ -312,6 +313,8 @@ class FirestoreServiceImpl implements FirestoreService {
           .set({
         'vehicles': profile.vehicles.map((v) => v.toMap()).toList(),
         'activeVehicleId': profile.activeVehicleId,
+        if (profile.displayName != null && profile.displayName!.isNotEmpty)
+          'displayName': profile.displayName,
       }, SetOptions(merge: true));
     } catch (e) {
       logError('Firestore: error saving user profile', e);
