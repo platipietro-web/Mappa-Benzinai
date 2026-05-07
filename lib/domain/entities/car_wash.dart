@@ -7,7 +7,7 @@ class CarWash extends Equatable {
   final String? address;
   final double latitude;
   final double longitude;
-  final String type; // 'self-service' | 'automatic'
+  final String type; // 'self-service' | 'automatic' | 'both'
   final bool hasVacuum;
   final String paymentType; // 'coins' | 'card' | 'both'
   final DateTime? createdAt;

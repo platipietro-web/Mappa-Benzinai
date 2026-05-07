@@ -830,9 +830,7 @@ class _CarWashScreenState extends State<CarWashScreen> {
                     ),
                     const SizedBox(height: 10),
                     _detailRow(
-                      wash.type == 'automatic'
-                          ? Icons.settings
-                          : Icons.handyman,
+                      _typeIcon(wash.type),
                       _typeLabel(wash.type),
                       'Tipo',
                     ),
@@ -953,7 +951,8 @@ class _CarWashScreenState extends State<CarWashScreen> {
                 decoration: const InputDecoration(labelText: 'Tipo'),
                 items: const [
                   DropdownMenuItem(value: 'self-service', child: Text('Self-service')),
-                  DropdownMenuItem(value: 'automatic', child: Text('Automatico')),
+                  DropdownMenuItem(value: 'automatic', child: Text('Automatico (rulli)')),
+                  DropdownMenuItem(value: 'both', child: Text('Self-service + Automatico')),
                 ],
                 onChanged: (v) => setSheetState(() => type = v ?? type),
               ),
@@ -1104,7 +1103,10 @@ class _CarWashScreenState extends State<CarWashScreen> {
                           child: Text('Self-service')),
                       DropdownMenuItem(
                           value: 'automatic',
-                          child: Text('Automatico')),
+                          child: Text('Automatico (rulli)')),
+                      DropdownMenuItem(
+                          value: 'both',
+                          child: Text('Self-service + Automatico')),
                     ],
                     onChanged: (v) =>
                         setSheetState(() => type = v ?? type),
@@ -1186,8 +1188,27 @@ class _CarWashScreenState extends State<CarWashScreen> {
 
   // ─── Label helpers ─────────────────────────────────────────────────────────
 
-  String _typeLabel(String type) =>
-      type == 'automatic' ? 'Automatico' : 'Self-service';
+  String _typeLabel(String type) {
+    switch (type) {
+      case 'automatic':
+        return 'Automatico (rulli)';
+      case 'both':
+        return 'Self-service + Automatico';
+      default:
+        return 'Self-service';
+    }
+  }
+
+  IconData _typeIcon(String type) {
+    switch (type) {
+      case 'automatic':
+        return Icons.settings_rounded;
+      case 'both':
+        return Icons.swap_horiz_rounded;
+      default:
+        return Icons.handyman_rounded;
+    }
+  }
 
   String _paymentLabel(String paymentType) {
     switch (paymentType) {

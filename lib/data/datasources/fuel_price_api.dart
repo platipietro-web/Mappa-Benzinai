@@ -234,10 +234,22 @@ class FuelPriceApiImpl implements FuelPriceApi {
       if (lat == 0.0 && lon == 0.0) continue;
       if (lat < 35.0 || lat > 48.0 || lon < 6.0 || lon > 19.0) continue;
 
-      final prices = pricesByStation[id];
+      var prices = pricesByStation[id];
       if (prices == null || prices.isEmpty) continue;
 
       final brand = _clean(r['Bandiera']);
+
+      // Pompe bianche are independent unbranded stations — they never sell
+      // brand-formulated premium fuels (V-Power, Blue, Hi-Q, etc.).
+      if (brand.toUpperCase() == 'POMPE BIANCHE') {
+        prices = Map<String, double>.from(prices)
+          ..remove(FuelTypes.benzinaSp100)
+          ..remove(FuelTypes.benzinaServita)
+          ..remove(FuelTypes.dieselPlus)
+          ..remove(FuelTypes.dieselServito);
+        if (prices.isEmpty) continue;
+      }
+
       final nome = _clean(r['Nome Impianto'] ?? r['NomeImpianto'] ?? '');
       final gestore = _clean(r['Gestore'] ?? '');
       final tipo = _clean(r['Tipo Impianto'] ?? r['TipoImpianto'] ?? '');
@@ -356,17 +368,19 @@ class FuelPriceApiImpl implements FuelPriceApi {
     if (n.contains('hiq 100')) return true; // Q8 variante
     if (n.contains('v-power') &&
         !n.contains('diesel') &&
-        !n.contains('gasolio')) return true; // Shell
-    if (n.contains('vpower') && !n.contains('diesel') && !n.contains('gasolio'))
+        !n.contains('gasolio')) { return true; } // Shell
+    if (n.contains('vpower') && !n.contains('diesel') && !n.contains('gasolio')) {
       return true; // Shell variante
+    }
     if (n.contains('supreme') &&
         !n.contains('diesel') &&
-        !n.contains('gasolio')) return true; // Esso
+        !n.contains('gasolio')) { return true; } // Esso
     if (n.contains('excellium') &&
         (n.contains('benz') ||
             n.contains('100') ||
-            (!n.contains('diesel') && !n.contains('gasolio'))))
+            (!n.contains('diesel') && !n.contains('gasolio')))) {
       return true; // Tamoil
+    }
     if (n.contains('racing fuel')) return true;
     if (n.contains('optimo')) return true; // IP
     return false;

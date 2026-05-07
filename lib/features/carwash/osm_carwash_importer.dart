@@ -82,13 +82,21 @@ out center tags;
   }
 
   String _parseType(Map<String, dynamic> tags) {
-    final v = _clean(tags['car_wash']).toLowerCase();
-    if (v.contains('automatic') ||
-        v.contains('tunnel') ||
-        v.contains('gantry') ||
-        v == 'yes') {
-      return 'automatic';
-    }
+    final selfServiceTag = _clean(tags['self_service']).toLowerCase();
+    final automatedTag = _clean(tags['automated']).toLowerCase();
+    final carWashVal = _clean(tags['car_wash']).toLowerCase();
+
+    final isAutomated = automatedTag == 'yes' ||
+        carWashVal == 'automated' ||
+        carWashVal.contains('tunnel') ||
+        carWashVal.contains('gantry');
+
+    final isSelfService = selfServiceTag == 'yes' ||
+        carWashVal == 'manual' ||
+        carWashVal == 'hand';
+
+    if (isAutomated && isSelfService) return 'both';
+    if (isAutomated) return 'automatic';
     return 'self-service';
   }
 
