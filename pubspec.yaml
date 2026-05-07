@@ -44,6 +44,9 @@ dependencies:
   shared_preferences: ^2.2.1
   uuid: ^4.1.0
 
+  # Navigation
+  url_launcher: ^6.2.0
+
   # Connectivity
   connectivity_plus: ^5.0.0
 

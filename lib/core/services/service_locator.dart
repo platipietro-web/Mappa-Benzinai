@@ -27,6 +27,14 @@ import 'package:mappa_prezzi_benzina/presentation/bloc/location_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/map_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/user_profile_bloc.dart';
 
+// Car wash feature
+import 'package:mappa_prezzi_benzina/features/carwash/carwash_bloc.dart';
+import 'package:mappa_prezzi_benzina/features/carwash/carwash_favorites_bloc.dart';
+import 'package:mappa_prezzi_benzina/features/carwash/carwash_repository.dart';
+import 'package:mappa_prezzi_benzina/features/carwash/carwash_repository_impl.dart';
+import 'package:mappa_prezzi_benzina/features/carwash/carwash_service.dart';
+import 'package:mappa_prezzi_benzina/features/carwash/osm_carwash_importer.dart';
+
 final getIt = GetIt.instance;
 
 void setupServiceLocator() {
@@ -74,4 +82,15 @@ void setupServiceLocator() {
       UserProfileBloc(getIt<UserProfileRepository>()));
   getIt.registerSingleton<DashboardBloc>(
       DashboardBloc(getIt<AnalyticsRepository>()));
+
+  // Car wash feature
+  getIt.registerSingleton<OsmCarWashImporter>(OsmCarWashImporter(dio));
+  getIt.registerSingleton<CarWashService>(
+      CarWashServiceImpl(firestore, getIt<OsmCarWashImporter>()));
+  getIt.registerSingleton<CarWashRepository>(
+      CarWashRepositoryImpl(getIt<CarWashService>()));
+  getIt.registerSingleton<CarWashBloc>(
+      CarWashBloc(getIt<CarWashRepository>()));
+  getIt.registerSingleton<CarWashFavoritesBloc>(
+      CarWashFavoritesBloc(firestore));
 }

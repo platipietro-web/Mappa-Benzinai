@@ -28,6 +28,7 @@ class AppConstants {
   static const String favoritesCollection = 'favorites';
   static const String priceHistoryCollection = 'price_history';
   static const String refuelingLogsCollection = 'refueling_logs';
+  static const String carWashesCollection = 'car_washes';
 
   // ─── Cache ─────────────────────────────────────────────────────────────────
   /// I CSV MIMIT vengono aggiornati una volta al giorno: cache di 6 ore.

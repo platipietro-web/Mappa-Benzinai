@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:mappa_prezzi_benzina/core/services/real_cost_calculator.dart';
 import 'package:mappa_prezzi_benzina/core/services/service_locator.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/gas_station.dart';
+import 'package:mappa_prezzi_benzina/domain/entities/price_update.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/refueling_log.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/user_location.dart';
 import 'package:mappa_prezzi_benzina/domain/repositories/repositories.dart';
@@ -11,7 +12,8 @@ import 'package:mappa_prezzi_benzina/presentation/bloc/auth_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/dashboard_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/favorites_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/location_bloc.dart';
-import 'package:mappa_prezzi_benzina/presentation/bloc/map_bloc.dart';
+import 'package:mappa_prezzi_benzina/presentation/bloc/map_bloc.dart'
+    show MapBloc, MapLoaded, MapLoading, UpdateStationPricesEvent;
 import 'package:mappa_prezzi_benzina/presentation/bloc/price_prediction_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/user_profile_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
@@ -422,6 +424,158 @@ class _StationDetailPageState extends State<StationDetailPage> {
     );
   }
 
+  // ─── Segnalazione prezzo ──────────────────────────────────────────────────
+
+  void _showPriceReportSheet(
+      BuildContext context, GasStation station, String userId) {
+    final sorted = _sortedPrices(station.prices);
+    String selectedFuel = sorted.first.key;
+    final priceCtrl = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          final currentPrice = station.prices[selectedFuel]!;
+          return Container(
+            decoration: const BoxDecoration(
+              color: AppTheme.surfaceColor,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            padding: EdgeInsets.only(
+              left: 24,
+              right: 24,
+              top: 24,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppTheme.borderColor,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Segnala prezzo aggiornato',
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimaryColor,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Accettato solo entro ±€0.20 dal prezzo attuale.',
+                  style: GoogleFonts.poppins(
+                      fontSize: 12, color: AppTheme.textSecondaryColor),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: selectedFuel,
+                  decoration:
+                      const InputDecoration(labelText: 'Tipo carburante'),
+                  items: sorted
+                      .map((e) => DropdownMenuItem(
+                          value: e.key, child: Text(e.key)))
+                      .toList(),
+                  onChanged: (v) =>
+                      setSheetState(() => selectedFuel = v ?? selectedFuel),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Prezzo attuale: €${currentPrice.toStringAsFixed(3)}',
+                  style: GoogleFonts.poppins(
+                      fontSize: 13, color: AppTheme.textSecondaryColor),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: priceCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Nuovo prezzo (€/L)',
+                    hintText: 'Es. 1.899',
+                    prefixText: '€ ',
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      final raw = priceCtrl.text
+                          .trim()
+                          .replaceAll(',', '.');
+                      final newPrice = double.tryParse(raw);
+                      if (newPrice == null || newPrice <= 0) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text('Inserisci un prezzo valido')),
+                        );
+                        return;
+                      }
+                      if ((newPrice - currentPrice).abs() > 0.20) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Il prezzo deve essere entro ±€0.20 dal valore attuale '
+                              '(€${currentPrice.toStringAsFixed(3)})',
+                            ),
+                            backgroundColor: AppTheme.errorColor,
+                          ),
+                        );
+                        return;
+                      }
+                      final update = PriceUpdate(
+                        id: const Uuid().v4(),
+                        stationId: station.id,
+                        userId: userId,
+                        fuelType: selectedFuel,
+                        price: newPrice,
+                        timestamp: DateTime.now(),
+                      );
+                      getIt<GasStationRepository>()
+                          .submitPriceUpdate(update)
+                          .then((_) {
+                        if (context.mounted) {
+                          context.read<MapBloc>().add(
+                                UpdateStationPricesEvent(
+                                  stationId: station.id,
+                                  fuelType: selectedFuel,
+                                  price: newPrice,
+                                ),
+                              );
+                        }
+                      });
+                      Navigator.pop(sheetCtx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: const Text('Segnalazione inviata, grazie!'),
+                          backgroundColor: AppTheme.secondaryColor,
+                        ),
+                      );
+                    },
+                    child: const Text('Invia segnalazione'),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   InputDecoration _sheetInputDecoration({String? hint}) => InputDecoration(
         hintText: hint,
         hintStyle: GoogleFonts.poppins(
@@ -582,6 +736,28 @@ class _StationDetailPageState extends State<StationDetailPage> {
           // Trend previsione prezzi
           if (!station.id.startsWith('osm-') && station.prices.isNotEmpty)
             const PriceTrendWidget(),
+
+          // Segnala prezzo (solo utenti registrati, solo se ci sono prezzi noti)
+          if (station.prices.isNotEmpty &&
+              !station.id.startsWith('osm-')) ...[
+            const SizedBox(height: 12),
+            BlocBuilder<AuthBloc, AuthState>(
+              builder: (context, authState) {
+                final isLoggedIn = authState is Authenticated &&
+                    !authState.isAnonymous;
+                if (!isLoggedIn) return const SizedBox.shrink();
+                return SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.edit_rounded, size: 18),
+                    label: const Text('Segnala prezzo aggiornato'),
+                    onPressed: () => _showPriceReportSheet(
+                        context, station, authState.userId),
+                  ),
+                );
+              },
+            ),
+          ],
         ],
       ),
     );

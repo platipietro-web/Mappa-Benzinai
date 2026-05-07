@@ -44,6 +44,19 @@ class DeselectStationEvent extends MapBlocEvent {
   const DeselectStationEvent();
 }
 
+class UpdateStationPricesEvent extends MapBlocEvent {
+  final String stationId;
+  final String fuelType;
+  final double price;
+  const UpdateStationPricesEvent({
+    required this.stationId,
+    required this.fuelType,
+    required this.price,
+  });
+  @override
+  List<Object?> get props => [stationId, fuelType, price];
+}
+
 // ─── States ───────────────────────────────────────────────────────────────────
 
 abstract class MapState extends Equatable {
@@ -103,6 +116,7 @@ class MapBloc extends Bloc<MapBlocEvent, MapState> {
     on<RefreshStationsEvent>(_onRefreshStations);
     on<SelectStationEvent>(_onSelectStation);
     on<DeselectStationEvent>(_onDeselectStation);
+    on<UpdateStationPricesEvent>(_onUpdatePrice);
   }
 
   // Posizione GPS reale del dispositivo — aggiornata solo da isGpsLocation=true
@@ -204,6 +218,36 @@ class MapBloc extends Bloc<MapBlocEvent, MapState> {
     emit(MapLoaded(
       stations: _stationsMap.values.toList(),
       selectedStation: null,
+      userLocation: _gpsLocation,
+    ));
+  }
+
+  void _onUpdatePrice(
+    UpdateStationPricesEvent event,
+    Emitter<MapState> emit,
+  ) {
+    final station = _stationsMap[event.stationId];
+    if (station == null) return;
+    final updated = GasStation(
+      id: station.id,
+      name: station.name,
+      address: station.address,
+      latitude: station.latitude,
+      longitude: station.longitude,
+      phoneNumber: station.phoneNumber,
+      website: station.website,
+      openingHours: station.openingHours,
+      prices: Map<String, double>.from(station.prices)..[event.fuelType] = event.price,
+      lastUpdated: DateTime.now(),
+      numberOfRatings: station.numberOfRatings,
+      averageRating: station.averageRating,
+      brand: station.brand,
+    );
+    _stationsMap[event.stationId] = updated;
+    if (_selectedStation?.id == event.stationId) _selectedStation = updated;
+    emit(MapLoaded(
+      stations: _stationsMap.values.toList(),
+      selectedStation: _selectedStation,
       userLocation: _gpsLocation,
     ));
   }

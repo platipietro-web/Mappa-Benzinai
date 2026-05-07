@@ -356,7 +356,7 @@ class _MapPageState extends State<MapPage> {
 
     return Column(
       children: [
-        _buildAppBar(state, stations.length),
+        _buildAppBar(state),
         Expanded(
           child: Row(
             children: [
@@ -463,7 +463,7 @@ class _MapPageState extends State<MapPage> {
 
     return Column(
       children: [
-        _buildAppBar(state, stations.length),
+        _buildAppBar(state),
         Expanded(
           child: Stack(
             children: [
@@ -492,7 +492,7 @@ class _MapPageState extends State<MapPage> {
 
   // ─── AppBar ────────────────────────────────────────────────────────────────
 
-  Widget _buildAppBar(MapLoaded state, int count) {
+  Widget _buildAppBar(MapLoaded state) {
     return Container(
       height: 56,
       decoration: const BoxDecoration(
@@ -528,26 +528,6 @@ class _MapPageState extends State<MapPage> {
                   ),
                 ),
                 const Spacer(),
-                if (count > 0)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppTheme.secondaryColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                          color: AppTheme.secondaryColor.withOpacity(0.3)),
-                    ),
-                    child: Text(
-                      '$count trovati',
-                      style: GoogleFonts.poppins(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.secondaryColor,
-                      ),
-                    ),
-                  ),
-                const SizedBox(width: 4),
                 _iconBtn(Icons.search_rounded, 'Cerca zona', _activateSearch),
                 _iconBtn(Icons.tune_rounded, 'Filtri', _showFilterBottomSheet),
                 _iconBtn(Icons.refresh_rounded, 'Aggiorna', () {
@@ -559,9 +539,23 @@ class _MapPageState extends State<MapPage> {
                     _mapController.move(
                         LatLng(loc.latitude, loc.longitude), 14);
                   }),
-                _iconBtn(Icons.person_rounded, 'Profilo', () {
-                  Navigator.pushNamed(context, '/profile');
-                }),
+                const SizedBox(width: 4),
+                Tooltip(
+                  message: 'Profilo',
+                  child: GestureDetector(
+                    onTap: () => Navigator.pushNamed(context, '/profile'),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: const BoxDecoration(
+                        color: AppTheme.primaryColor,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.person_rounded,
+                          color: Colors.white, size: 18),
+                    ),
+                  ),
+                ),
               ],
             ),
     );
