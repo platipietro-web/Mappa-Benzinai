@@ -1,13 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
-import 'package:uuid/uuid.dart';
 import 'package:mappa_prezzi_benzina/core/constants/app_constants.dart';
 import 'package:mappa_prezzi_benzina/core/services/geocoding_service.dart';
 import 'package:mappa_prezzi_benzina/core/services/service_locator.dart';
@@ -34,7 +34,6 @@ class _CarWashScreenState extends State<CarWashScreen> {
   final MapController _mapController = MapController();
   Timer? _refreshTimer;
   LatLng? _lastLoadedCenter;
-  bool _isAddMode = false;
   bool _isImporting = false;
 
   // Search
@@ -180,6 +179,19 @@ class _CarWashScreenState extends State<CarWashScreen> {
     _silentOsmImport(center, radius);
   }
 
+  Future<void> _openMaps(double lat, double lon) async {
+    final uri = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1&destination=$lat,$lon',
+    );
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Impossibile aprire Maps')),
+        );
+      }
+    }
+  }
+
   Future<String?> _reverseGeocode(double lat, double lon) async {
     try {
       final uri = Uri.parse(
@@ -210,11 +222,6 @@ class _CarWashScreenState extends State<CarWashScreen> {
           LatLng(wash.latitude, wash.longitude), _mapController.camera.zoom);
     } catch (_) {}
     _showWashDetails(wash);
-  }
-
-  void _onMapTap(LatLng latLng) {
-    if (!_isAddMode) return;
-    _showAddForm(latLng);
   }
 
   @override
@@ -303,38 +310,15 @@ class _CarWashScreenState extends State<CarWashScreen> {
                               washes: loaded.washes,
                               selectedWash: loaded.selectedWash,
                               userLocation: loaded.userLocation,
-                              isAddMode: _isAddMode,
                               onMarkerTap: _onMarkerTap,
-                              onMapTap: _onMapTap,
                             ),
                           ),
-                          if (!_isAddMode)
-                            Positioned(
-                              top: 12,
-                              left: 0,
-                              right: 0,
-                              child: Center(child: _buildSearchAreaButton()),
-                            ),
-                          if (_isAddMode) _buildAddModeBanner(),
-                          if (!_isAddMode)
-                            Positioned(
-                              right: 16,
-                              bottom: 16,
-                              child: FloatingActionButton.extended(
-                                heroTag: 'carwash_fab',
-                                onPressed: () =>
-                                    setState(() => _isAddMode = true),
-                                icon: const Icon(
-                                    Icons.add_location_alt_outlined),
-                                label: Text(
-                                  'Aggiungi',
-                                  style: GoogleFonts.poppins(
-                                      fontWeight: FontWeight.w600),
-                                ),
-                                backgroundColor: _kCarWashColor,
-                                foregroundColor: Colors.white,
-                              ),
-                            ),
+                          Positioned(
+                            top: 12,
+                            left: 0,
+                            right: 0,
+                            child: Center(child: _buildSearchAreaButton()),
+                          ),
                         ],
                       ),
                     ),
@@ -580,45 +564,6 @@ class _CarWashScreenState extends State<CarWashScreen> {
     );
   }
 
-  Widget _buildAddModeBanner() {
-    return Positioned(
-      top: 0,
-      left: 0,
-      right: 0,
-      child: Container(
-        color: AppTheme.primaryColor.withOpacity(0.92),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: SafeArea(
-          bottom: false,
-          child: Row(
-            children: [
-              const Icon(Icons.touch_app, color: Colors.white, size: 18),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Tocca la mappa per selezionare la posizione',
-                  style: GoogleFonts.poppins(
-                      fontSize: 13, color: Colors.white),
-                ),
-              ),
-              TextButton(
-                onPressed: () => setState(() => _isAddMode = false),
-                child: Text(
-                  'Annulla',
-                  style: GoogleFonts.poppins(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildSplash() {
     return Container(
       color: AppTheme.backgroundColor,
@@ -827,12 +772,25 @@ class _CarWashScreenState extends State<CarWashScreen> {
                       Icons.place_outlined,
                       addressText,
                       'Indirizzo',
+                      onTap: isGeocoding
+                          ? null
+                          : () => _openMaps(wash.latitude, wash.longitude),
                     ),
                     const SizedBox(height: 10),
                     _detailRow(
-                      _typeIcon(wash.type),
-                      _typeLabel(wash.type),
-                      'Tipo',
+                      Icons.handyman_rounded,
+                      wash.type != 'automatic'
+                          ? 'Disponibile'
+                          : 'Non disponibile',
+                      'Self-service',
+                    ),
+                    const SizedBox(height: 10),
+                    _detailRow(
+                      Icons.settings_rounded,
+                      wash.type != 'self-only'
+                          ? 'Disponibile'
+                          : 'Non disponibile',
+                      'Automatico (rulli)',
                     ),
                     const SizedBox(height: 10),
                     _detailRow(
@@ -870,32 +828,51 @@ class _CarWashScreenState extends State<CarWashScreen> {
     );
   }
 
-  Widget _detailRow(IconData icon, String value, String label) {
-    return Row(
+  Widget _detailRow(IconData icon, String value, String label,
+      {VoidCallback? onTap}) {
+    final content = Row(
       children: [
         Icon(icon, size: 18, color: AppTheme.textSecondaryColor),
         const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(label,
-                style: GoogleFonts.poppins(
-                    fontSize: 11, color: AppTheme.textSecondaryColor)),
-            Text(value,
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: AppTheme.textPrimaryColor,
-                )),
-          ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label,
+                  style: GoogleFonts.poppins(
+                      fontSize: 11, color: AppTheme.textSecondaryColor)),
+              Text(value,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: onTap != null
+                        ? AppTheme.primaryColor
+                        : AppTheme.textPrimaryColor,
+                  )),
+            ],
+          ),
         ),
+        if (onTap != null)
+          Icon(Icons.navigation_rounded,
+              size: 16, color: AppTheme.primaryColor),
       ],
+    );
+
+    if (onTap == null) return content;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: content,
+      ),
     );
   }
 
   void _showReportForm(CarWash wash) {
-    String type = wash.type;
+    bool hasSelfService = wash.type != 'automatic';
+    bool hasAutomatic = wash.type != 'self-only';
     bool hasVacuum = wash.hasVacuum;
     String paymentType = wash.paymentType;
 
@@ -946,24 +923,29 @@ class _CarWashScreenState extends State<CarWashScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              DropdownButtonFormField<String>(
-                value: type,
-                decoration: const InputDecoration(labelText: 'Tipo'),
-                items: const [
-                  DropdownMenuItem(value: 'self-service', child: Text('Self-service')),
-                  DropdownMenuItem(value: 'automatic', child: Text('Automatico (rulli)')),
-                  DropdownMenuItem(value: 'both', child: Text('Self-service + Automatico')),
-                ],
-                onChanged: (v) => setSheetState(() => type = v ?? type),
-              ),
-              const SizedBox(height: 4),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: Text(
-                  'Aspirapolvere',
-                  style: GoogleFonts.poppins(
-                      fontSize: 14, color: AppTheme.textPrimaryColor),
-                ),
+                title: Text('Self-service',
+                    style: GoogleFonts.poppins(
+                        fontSize: 14, color: AppTheme.textPrimaryColor)),
+                value: hasSelfService,
+                onChanged: (v) => setSheetState(() => hasSelfService = v),
+                activeColor: AppTheme.primaryColor,
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('Automatico (rulli)',
+                    style: GoogleFonts.poppins(
+                        fontSize: 14, color: AppTheme.textPrimaryColor)),
+                value: hasAutomatic,
+                onChanged: (v) => setSheetState(() => hasAutomatic = v),
+                activeColor: AppTheme.primaryColor,
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('Aspirapolvere',
+                    style: GoogleFonts.poppins(
+                        fontSize: 14, color: AppTheme.textPrimaryColor)),
                 value: hasVacuum,
                 onChanged: (v) => setSheetState(() => hasVacuum = v),
                 activeColor: AppTheme.primaryColor,
@@ -983,13 +965,20 @@ class _CarWashScreenState extends State<CarWashScreen> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
+                    final computedType = hasSelfService && hasAutomatic
+                        ? 'both'
+                        : hasAutomatic
+                            ? 'automatic'
+                            : hasSelfService
+                                ? 'self-only'
+                                : 'both'; // entrambi OFF → default both
                     final updated = CarWash(
                       id: wash.id,
                       name: wash.name,
                       address: wash.address,
                       latitude: wash.latitude,
                       longitude: wash.longitude,
-                      type: type,
+                      type: computedType,
                       hasVacuum: hasVacuum,
                       paymentType: paymentType,
                       createdAt: wash.createdAt,
@@ -1015,200 +1004,7 @@ class _CarWashScreenState extends State<CarWashScreen> {
     );
   }
 
-  void _showAddForm(LatLng location) {
-    final nameController = TextEditingController();
-    final addressController = TextEditingController();
-    String type = 'self-service';
-    bool hasVacuum = true;
-    String paymentType = 'both';
-    bool geocodingDone = false;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetCtx) => StatefulBuilder(
-        builder: (ctx, setSheetState) {
-          // Auto-fill address once when sheet opens
-          if (!geocodingDone) {
-            geocodingDone = true;
-            _reverseGeocode(location.latitude, location.longitude).then((addr) {
-              if (addr != null && addressController.text.isEmpty) {
-                addressController.text = addr;
-              }
-            });
-          }
-
-          return Container(
-            decoration: const BoxDecoration(
-              color: AppTheme.surfaceColor,
-              borderRadius:
-                  BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            padding: EdgeInsets.only(
-              left: 24,
-              right: 24,
-              top: 24,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: AppTheme.borderColor,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Nuovo autolavaggio',
-                    style: GoogleFonts.poppins(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textPrimaryColor,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: nameController,
-                    textCapitalization: TextCapitalization.words,
-                    decoration: const InputDecoration(
-                      labelText: 'Nome',
-                      hintText: 'Es. Autolavaggio Roma Nord',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: addressController,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: const InputDecoration(
-                      labelText: 'Indirizzo',
-                      hintText: 'Via Roma 1, Milano',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: type,
-                    decoration: const InputDecoration(labelText: 'Tipo'),
-                    items: const [
-                      DropdownMenuItem(
-                          value: 'self-service',
-                          child: Text('Self-service')),
-                      DropdownMenuItem(
-                          value: 'automatic',
-                          child: Text('Automatico (rulli)')),
-                      DropdownMenuItem(
-                          value: 'both',
-                          child: Text('Self-service + Automatico')),
-                    ],
-                    onChanged: (v) =>
-                        setSheetState(() => type = v ?? type),
-                  ),
-                  const SizedBox(height: 4),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(
-                      'Aspirapolvere',
-                      style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          color: AppTheme.textPrimaryColor),
-                    ),
-                    value: hasVacuum,
-                    onChanged: (v) =>
-                        setSheetState(() => hasVacuum = v),
-                    activeColor: AppTheme.primaryColor,
-                  ),
-                  DropdownButtonFormField<String>(
-                    value: paymentType,
-                    decoration:
-                        const InputDecoration(labelText: 'Pagamento'),
-                    items: const [
-                      DropdownMenuItem(
-                          value: 'coins', child: Text('Monete')),
-                      DropdownMenuItem(
-                          value: 'card', child: Text('Carta')),
-                      DropdownMenuItem(
-                          value: 'both',
-                          child: Text('Monete e carta')),
-                    ],
-                    onChanged: (v) =>
-                        setSheetState(() => paymentType = v ?? paymentType),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        final name = nameController.text.trim();
-                        if (name.isEmpty) return;
-                        final address = addressController.text.trim();
-                        final wash = CarWash(
-                          id: const Uuid().v4(),
-                          name: name,
-                          address: address.isEmpty ? null : address,
-                          latitude: location.latitude,
-                          longitude: location.longitude,
-                          type: type,
-                          hasVacuum: hasVacuum,
-                          paymentType: paymentType,
-                        );
-                        context
-                            .read<CarWashBloc>()
-                            .add(AddCarWashEvent(wash));
-                        Navigator.pop(sheetCtx);
-                        if (mounted) {
-                          setState(() => _isAddMode = false);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: const Text(
-                                  'Autolavaggio aggiunto con successo'),
-                              backgroundColor: AppTheme.secondaryColor,
-                            ),
-                          );
-                        }
-                      },
-                      child: const Text('Salva'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
   // ─── Label helpers ─────────────────────────────────────────────────────────
-
-  String _typeLabel(String type) {
-    switch (type) {
-      case 'automatic':
-        return 'Automatico (rulli)';
-      case 'both':
-        return 'Self-service + Automatico';
-      default:
-        return 'Self-service';
-    }
-  }
-
-  IconData _typeIcon(String type) {
-    switch (type) {
-      case 'automatic':
-        return Icons.settings_rounded;
-      case 'both':
-        return Icons.swap_horiz_rounded;
-      default:
-        return Icons.handyman_rounded;
-    }
-  }
 
   String _paymentLabel(String paymentType) {
     switch (paymentType) {

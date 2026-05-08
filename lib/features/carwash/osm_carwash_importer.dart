@@ -85,19 +85,31 @@ out center tags;
     final selfServiceTag = _clean(tags['self_service']).toLowerCase();
     final automatedTag = _clean(tags['automated']).toLowerCase();
     final carWashVal = _clean(tags['car_wash']).toLowerCase();
+    final carWashType = _clean(tags['car_wash:type']).toLowerCase();
+    final carWashSelf = _clean(tags['car_wash:self_service']).toLowerCase();
+    final carWashAuto = _clean(tags['car_wash:automated']).toLowerCase();
 
     final isAutomated = automatedTag == 'yes' ||
+        carWashAuto == 'yes' ||
         carWashVal == 'automated' ||
+        carWashType == 'automatic' ||
+        carWashType == 'tunnel' ||
+        carWashType == 'rollover' ||
+        carWashType == 'gantry' ||
         carWashVal.contains('tunnel') ||
         carWashVal.contains('gantry');
 
     final isSelfService = selfServiceTag == 'yes' ||
+        carWashSelf == 'yes' ||
         carWashVal == 'manual' ||
-        carWashVal == 'hand';
+        carWashVal == 'hand' ||
+        carWashType == 'self_service' ||
+        carWashType == 'manual';
 
     if (isAutomated && isSelfService) return 'both';
     if (isAutomated) return 'automatic';
-    return 'self-service';
+    // When OSM doesn't specify, assume both services are available
+    return 'both';
   }
 
   bool _parseVacuum(Map<String, dynamic> tags) {

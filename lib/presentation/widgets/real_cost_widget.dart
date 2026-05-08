@@ -23,7 +23,6 @@ class RealCostWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Non mostrare se manca la distanza o il prezzo medio
     if (distanceKm <= 0 || areaAvgPrice <= 0) return const SizedBox.shrink();
 
     final result = RealCostCalculator.calculate(
@@ -33,68 +32,84 @@ class RealCostWidget extends StatelessWidget {
       profile: profile,
     );
 
+    final consumption = profile.fuelConsumption;
+    final tankSize = profile.tankSize;
+    final roundTripKm = distanceKm * 2;
+
+    final isWorth = result.isWorthIt;
+    final accentColor =
+        isWorth ? const Color(0xFF4CAF50) : Colors.orange[700]!;
+
     return Container(
       margin: const EdgeInsets.only(top: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: result.isWorthIt
-            ? const Color(0xFF4CAF50).withOpacity(0.07)
-            : Colors.orange.withOpacity(0.07),
+        color: accentColor.withOpacity(0.07),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: result.isWorthIt
-              ? const Color(0xFF4CAF50).withOpacity(0.3)
-              : Colors.orange.withOpacity(0.3),
-        ),
+        border: Border.all(color: accentColor.withOpacity(0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Intestazione ──────────────────────────────────────────────────
           Row(
             children: [
-              Icon(
-                result.isWorthIt
-                    ? Icons.thumb_up_rounded
-                    : Icons.info_outline_rounded,
-                size: 16,
-                color: result.isWorthIt
-                    ? const Color(0xFF4CAF50)
-                    : Colors.orange[700],
-              ),
+              Icon(Icons.calculate_rounded, size: 16, color: accentColor),
               const SizedBox(width: 6),
-              Text(
-                profile.vehicleName.isNotEmpty
-                    ? 'Costo reale · ${profile.vehicleName}'
-                    : 'Costo reale ($fuelType)',
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textPrimaryColor,
+              Expanded(
+                child: Text(
+                  profile.vehicleName.isNotEmpty
+                      ? 'Stima costo reale · ${profile.vehicleName}'
+                      : 'Stima costo reale',
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimaryColor,
+                  ),
                 ),
               ),
-              const Spacer(),
-              _badge(result),
+              _badge(isWorth),
             ],
           ),
+          const SizedBox(height: 5),
+          // ── Ipotesi di calcolo ─────────────────────────────────────────────
+          Text(
+            '$fuelType · ${consumption.toStringAsFixed(1)} L/100km'
+            ' · serbatoio ${tankSize.toStringAsFixed(0)} L'
+            ' · distanza ${distanceKm.toStringAsFixed(1)} km',
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              color: AppTheme.textSecondaryColor,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
           const SizedBox(height: 10),
-          _row('Prezzo listato',
-              '€ ${result.listedPrice.toStringAsFixed(3)}/L'),
+          const Divider(height: 1, color: AppTheme.borderColor),
+          const SizedBox(height: 10),
+          // ── Righe dettaglio ────────────────────────────────────────────────
+          _row(
+            'Costo per arrivare qui (A/R ~${roundTripKm.toStringAsFixed(1)} km)',
+            '€ ${result.tripFuelCost.toStringAsFixed(2)}',
+          ),
           const SizedBox(height: 4),
-          _row('Prezzo effettivo (con tragitto)',
-              '€ ${result.effectivePrice.toStringAsFixed(3)}/L',
-              bold: true),
+          _row(
+            'Prezzo $fuelType listato',
+            '€ ${result.listedPrice.toStringAsFixed(3)}/L',
+          ),
           const SizedBox(height: 4),
-          _row('Costo tragitto A/R',
-              '€ ${result.tripFuelCost.toStringAsFixed(2)}'),
-          const SizedBox(height: 6),
+          _row(
+            'Prezzo effettivo (tragitto incluso)',
+            '€ ${result.effectivePrice.toStringAsFixed(3)}/L',
+            bold: true,
+          ),
+          const SizedBox(height: 8),
           _savingRow(result),
         ],
       ),
     );
   }
 
-  Widget _badge(RealCostResult result) {
-    final isWorth = result.isWorthIt;
+  Widget _badge(bool isWorth) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
@@ -118,13 +133,16 @@ class RealCostWidget extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: GoogleFonts.poppins(
-            fontSize: 12,
-            color: AppTheme.textSecondaryColor,
+        Expanded(
+          child: Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: AppTheme.textSecondaryColor,
+            ),
           ),
         ),
+        const SizedBox(width: 8),
         Text(
           value,
           style: GoogleFonts.poppins(
@@ -140,17 +158,16 @@ class RealCostWidget extends StatelessWidget {
   Widget _savingRow(RealCostResult result) {
     final saving = result.netSaving;
     final isPositive = saving > 0;
-    final color =
-        isPositive ? const Color(0xFF4CAF50) : Colors.orange[700]!;
+    final color = isPositive ? const Color(0xFF4CAF50) : Colors.orange[700]!;
     final label = isPositive
-        ? 'Risparmio netto sul pieno'
-        : 'Costo aggiuntivo sul pieno';
+        ? 'Risparmio netto sul pieno (vs media zona)'
+        : 'Costo aggiuntivo sul pieno (vs media zona)';
     final value = isPositive
         ? '+ € ${saving.toStringAsFixed(2)}'
         : '- € ${saving.abs().toStringAsFixed(2)}';
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(8),
@@ -158,14 +175,17 @@ class RealCostWidget extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: color,
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
             ),
           ),
+          const SizedBox(width: 8),
           Text(
             value,
             style: GoogleFonts.poppins(

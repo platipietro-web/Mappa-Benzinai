@@ -7,7 +7,11 @@ class CarWash extends Equatable {
   final String? address;
   final double latitude;
   final double longitude;
-  final String type; // 'self-service' | 'automatic' | 'both'
+  // 'both' = self-service + automatic (default)
+  // 'automatic' = solo rulli (no self-service)
+  // 'self-only' = solo self-service (no rulli) — impostato esplicitamente
+  // 'self-service' = legacy pre-migration, trattato come 'both' in lettura
+  final String type;
   final bool hasVacuum;
   final String paymentType; // 'coins' | 'card' | 'both'
   final DateTime? createdAt;

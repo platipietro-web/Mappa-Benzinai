@@ -33,34 +33,11 @@ class PriceTrendWidget extends StatelessWidget {
         if (prediction == null) return const SizedBox.shrink();
 
         if (!prediction.hasEnoughData) {
-          return _insufficientDataRow(prediction.advice);
+          return const SizedBox.shrink();
         }
 
         return _trendCard(prediction, state.fuelType ?? '');
       },
-    );
-  }
-
-  Widget _insufficientDataRow(String message) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Row(
-        children: [
-          const Icon(Icons.hourglass_empty_rounded,
-              size: 14, color: AppTheme.textSecondaryColor),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              message,
-              style: GoogleFonts.poppins(
-                fontSize: 11,
-                color: AppTheme.textSecondaryColor,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 

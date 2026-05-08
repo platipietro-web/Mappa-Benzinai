@@ -21,9 +21,9 @@ class CarWashModel extends CarWash {
       address: json['address'] as String?,
       latitude: ((json['latitude'] as num?) ?? 0.0).toDouble(),
       longitude: ((json['longitude'] as num?) ?? 0.0).toDouble(),
-      type: (json['type'] as String?) ?? 'self-service',
-      hasVacuum: (json['has_vacuum'] as bool?) ?? false,
-      paymentType: (json['payment_type'] as String?) ?? 'coins',
+      type: (json['type'] as String?) ?? 'both',
+      hasVacuum: (json['has_vacuum'] as bool?) ?? true,
+      paymentType: (json['payment_type'] as String?) ?? 'both',
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'] as String)
           : null,
@@ -32,15 +32,19 @@ class CarWashModel extends CarWash {
 
   factory CarWashModel.fromFirestore(Map<String, dynamic> json, String docId) {
     final location = json['location'] as Map<String, dynamic>?;
+    final rawType = (json['type'] as String?) ?? 'both';
+    // 'self-service' was the old default before the 'both' migration —
+    // treat it as 'both' so existing records show automatic as available.
+    final type = rawType == 'self-service' ? 'both' : rawType;
     return CarWashModel(
       id: docId,
       name: (json['name'] as String?) ?? 'Autolavaggio',
       address: json['address'] as String?,
       latitude: ((location?['latitude'] as num?) ?? 0.0).toDouble(),
       longitude: ((location?['longitude'] as num?) ?? 0.0).toDouble(),
-      type: (json['type'] as String?) ?? 'self-service',
-      hasVacuum: (json['has_vacuum'] as bool?) ?? false,
-      paymentType: (json['payment_type'] as String?) ?? 'coins',
+      type: type,
+      hasVacuum: (json['has_vacuum'] as bool?) ?? true,
+      paymentType: (json['payment_type'] as String?) ?? 'both',
       createdAt: json['created_at'] != null
           ? (json['created_at'] as Timestamp).toDate()
           : null,

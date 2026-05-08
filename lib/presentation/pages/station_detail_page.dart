@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:mappa_prezzi_benzina/core/services/real_cost_calculator.dart';
 import 'package:mappa_prezzi_benzina/core/services/service_locator.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/gas_station.dart';
@@ -721,17 +722,31 @@ class _StationDetailPageState extends State<StationDetailPage> {
           ],
 
           // Costo reale personalizzato
-          if (fuelPrice != null &&
-              profile.fuelConsumption > 0 &&
-              distanceKm > 0 &&
-              areaAvgPrice > 0)
-            RealCostWidget(
-              distanceKm: distanceKm,
-              fuelPrice: fuelPrice,
-              areaAvgPrice: areaAvgPrice,
-              profile: profile,
-              fuelType: fuelType,
-            ),
+          Builder(builder: (context) {
+            final authState = context.read<AuthBloc>().state;
+            final isLoggedIn =
+                authState is Authenticated && !authState.isAnonymous;
+            final hasVehicle = profile.activeVehicle != null;
+
+            if (hasVehicle &&
+                fuelPrice != null &&
+                distanceKm > 0 &&
+                areaAvgPrice > 0) {
+              return RealCostWidget(
+                distanceKm: distanceKm,
+                fuelPrice: fuelPrice,
+                areaAvgPrice: areaAvgPrice,
+                profile: profile,
+                fuelType: fuelType,
+              );
+            }
+
+            if (isLoggedIn && !hasVehicle && distanceKm > 0) {
+              return _noVehiclePrompt(context);
+            }
+
+            return const SizedBox.shrink();
+          }),
 
           // Trend previsione prezzi
           if (!station.id.startsWith('osm-') && station.prices.isNotEmpty)
@@ -855,6 +870,7 @@ class _StationDetailPageState extends State<StationDetailPage> {
             station.address.isNotEmpty
                 ? station.address
                 : 'Indirizzo non disponibile',
+            onTap: () => _openMaps(station.latitude, station.longitude),
           ),
           const SizedBox(height: 10),
           _infoTile(
@@ -928,26 +944,52 @@ class _StationDetailPageState extends State<StationDetailPage> {
     );
   }
 
-  Widget _infoTile(IconData icon, String title, String subtitle) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.backgroundColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.borderColor),
-      ),
-      child: ListTile(
-        leading: Icon(icon, color: AppTheme.primaryColor),
-        title: Text(
-          title,
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w600,
-            color: AppTheme.textPrimaryColor,
+  Future<void> _openMaps(double lat, double lon) async {
+    final uri = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1&destination=$lat,$lon',
+    );
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Impossibile aprire Maps')),
+        );
+      }
+    }
+  }
+
+  Widget _infoTile(IconData icon, String title, String subtitle,
+      {VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppTheme.backgroundColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: onTap != null
+                ? AppTheme.primaryColor.withOpacity(0.4)
+                : AppTheme.borderColor,
           ),
         ),
-        subtitle: Text(
-          subtitle,
-          style: GoogleFonts.poppins(
-              fontSize: 12, color: AppTheme.textSecondaryColor),
+        child: ListTile(
+          leading: Icon(icon, color: AppTheme.primaryColor),
+          title: Text(
+            title,
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textPrimaryColor,
+            ),
+          ),
+          subtitle: Text(
+            subtitle,
+            style: GoogleFonts.poppins(
+                fontSize: 12, color: AppTheme.textSecondaryColor),
+          ),
+          trailing: onTap != null
+              ? Icon(Icons.navigation_rounded,
+                  size: 18, color: AppTheme.primaryColor)
+              : null,
         ),
       ),
     );
@@ -960,6 +1002,44 @@ class _StationDetailPageState extends State<StationDetailPage> {
         fontSize: 18,
         fontWeight: FontWeight.bold,
         color: AppTheme.textPrimaryColor,
+      ),
+    );
+  }
+
+  Widget _noVehiclePrompt(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.primaryColor.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.primaryColor.withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.directions_car_outlined,
+              size: 18, color: AppTheme.primaryColor),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Configura il tuo veicolo nel profilo per vedere il costo reale del rifornimento',
+              style: GoogleFonts.poppins(
+                  fontSize: 12, color: AppTheme.textSecondaryColor),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () => Navigator.pushNamed(context, '/profile'),
+            child: Text(
+              'Configura',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.primaryColor,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -4,7 +4,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ── Stazioni (lettura pubblica, scrittura autenticati) ─────────────────────
-    match /stations/{stationId} {
+    match /gas_stations/{stationId} {
       allow read: if true;
       allow write: if request.auth != null;
 
