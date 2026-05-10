@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -69,6 +70,12 @@ void setupServiceLocator() {
   );
   getIt.registerSingleton<AnalyticsRepository>(
     AnalyticsRepositoryImpl(getIt<FirestoreService>()),
+  );
+
+  // Shared tab index — usato per switchare sulla mappa dai preferiti
+  getIt.registerSingleton<ValueNotifier<int>>(
+    ValueNotifier<int>(0),
+    instanceName: 'mainTabIndex',
   );
 
   // BLoCs

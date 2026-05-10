@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mappa_prezzi_benzina/core/constants/app_constants.dart';
+import 'package:mappa_prezzi_benzina/core/services/service_locator.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/gas_station.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/saved_station.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/user_location.dart';
@@ -126,7 +127,6 @@ class FavoritesPage extends StatelessWidget {
   }
 
   void _openOnMap(BuildContext context, SavedStation s) {
-    // Converti SavedStation → GasStation per il MapBloc
     final gasStation = GasStation(
       id: s.id,
       name: s.name,
@@ -137,7 +137,10 @@ class FavoritesPage extends StatelessWidget {
       brand: s.brand,
     );
 
-    // Carica le stazioni vicine alla preferita (pre-popola la lista)
+    // Segnala alla MapPage quale stazione centrare/selezionare al ritorno.
+    // Deve essere impostato PRIMA di LoadNearbyStationsEvent perché il BlocListener
+    // di MapPage si attiva sul passaggio MapLoading→MapLoaded.
+    context.read<MapBloc>().add(SetPendingHighlightStationEvent(gasStation));
     context.read<MapBloc>().add(LoadNearbyStationsEvent(
       location: UserLocation(
         latitude: s.latitude,
@@ -147,15 +150,9 @@ class FavoritesPage extends StatelessWidget {
       radiusKm: AppConstants.stationSearchRadius,
     ));
 
-    // La selezione, il camera-move e lo scroll avvengono nella map page
-    // tramite _pendingHighlightStation, così "Cerca in questa zona" non
-    // viene influenzato da selezioni precedenti.
-    Navigator.pushNamedAndRemoveUntil(
-      context,
-      '/map',
-      (route) => false,
-      arguments: {'highlightStation': gasStation},
-    );
+    // Switcha sul tab mappa e torna a MainScreen (bottom nav bar intatta).
+    getIt<ValueNotifier<int>>(instanceName: 'mainTabIndex').value = 0;
+    Navigator.popUntil(context, (route) => route.isFirst);
   }
 }
 

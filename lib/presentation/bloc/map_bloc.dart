@@ -44,6 +44,17 @@ class DeselectStationEvent extends MapBlocEvent {
   const DeselectStationEvent();
 }
 
+class SetPendingHighlightStationEvent extends MapBlocEvent {
+  final GasStation station;
+  const SetPendingHighlightStationEvent(this.station);
+  @override
+  List<Object?> get props => [station];
+}
+
+class ClearPendingHighlightStationEvent extends MapBlocEvent {
+  const ClearPendingHighlightStationEvent();
+}
+
 class UpdateStationPricesEvent extends MapBlocEvent {
   final String stationId;
   final String fuelType;
@@ -88,15 +99,17 @@ class MapLoaded extends MapState {
   final List<GasStation> stations;
   final GasStation? selectedStation;
   final UserLocation? userLocation;
+  final GasStation? pendingHighlightStation;
 
   const MapLoaded({
     required this.stations,
     this.selectedStation,
     this.userLocation,
+    this.pendingHighlightStation,
   });
 
   @override
-  List<Object?> get props => [stations, selectedStation, userLocation];
+  List<Object?> get props => [stations, selectedStation, userLocation, pendingHighlightStation];
 }
 
 class MapError extends MapState {
@@ -117,6 +130,8 @@ class MapBloc extends Bloc<MapBlocEvent, MapState> {
     on<SelectStationEvent>(_onSelectStation);
     on<DeselectStationEvent>(_onDeselectStation);
     on<UpdateStationPricesEvent>(_onUpdatePrice);
+    on<SetPendingHighlightStationEvent>(_onSetPendingHighlight);
+    on<ClearPendingHighlightStationEvent>(_onClearPendingHighlight);
   }
 
   // Posizione GPS reale del dispositivo — aggiornata solo da isGpsLocation=true
@@ -126,6 +141,7 @@ class MapBloc extends Bloc<MapBlocEvent, MapState> {
 
   final Map<String, GasStation> _stationsMap = {};
   GasStation? _selectedStation;
+  GasStation? _pendingHighlightStation;
 
   Future<void> _onLoadNearbyStations(
     LoadNearbyStationsEvent event,
@@ -169,6 +185,7 @@ class MapBloc extends Bloc<MapBlocEvent, MapState> {
         stations: _stationsMap.values.toList(),
         selectedStation: _selectedStation,
         userLocation: _gpsLocation,
+        pendingHighlightStation: _pendingHighlightStation,
       ));
     } catch (e) {
       if (_stationsMap.isNotEmpty) {
@@ -176,10 +193,34 @@ class MapBloc extends Bloc<MapBlocEvent, MapState> {
           stations: _stationsMap.values.toList(),
           selectedStation: _selectedStation,
           userLocation: _gpsLocation,
+          pendingHighlightStation: _pendingHighlightStation,
         ));
       } else {
         emit(MapError('Impossibile caricare le stazioni: ${e.toString()}'));
       }
+    }
+  }
+
+  void _onSetPendingHighlight(
+    SetPendingHighlightStationEvent event,
+    Emitter<MapState> emit,
+  ) {
+    _pendingHighlightStation = event.station;
+  }
+
+  void _onClearPendingHighlight(
+    ClearPendingHighlightStationEvent event,
+    Emitter<MapState> emit,
+  ) {
+    _pendingHighlightStation = null;
+    if (state is MapLoaded) {
+      final s = state as MapLoaded;
+      emit(MapLoaded(
+        stations: s.stations,
+        selectedStation: s.selectedStation,
+        userLocation: s.userLocation,
+        pendingHighlightStation: null,
+      ));
     }
   }
 

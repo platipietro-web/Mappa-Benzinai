@@ -185,21 +185,21 @@ class _MapPageState extends State<MapPage> {
                   }
                 },
               ),
-              // Gestisce due casi:
-              // 1. Tap marker: MapLoaded→MapLoaded con selectedStation cambiato
-              //    → scrolla la lista alla card selezionata
-              // 2. Navigazione dai preferiti: MapLoading→MapLoaded con
-              //    _pendingHighlightStation impostato → seleziona, centra camera.
-              //    Lo scroll avviene quando il caso 1 si attiva di conseguenza.
               BlocListener<MapBloc, MapState>(
                 listenWhen: (prev, curr) {
-                  // Caso preferiti: caricamento completato
+                  // Preferiti (via MapBloc): caricamento completato con stazione pending
+                  if (prev is MapLoading &&
+                      curr is MapLoaded &&
+                      curr.pendingHighlightStation != null) {
+                    return true;
+                  }
+                  // Preferiti (via route args, percorso legacy): locale pending + load completato
                   if (_pendingHighlightStation != null &&
                       prev is MapLoading &&
                       curr is MapLoaded) {
                     return true;
                   }
-                  // Caso tap marker/selezione: selectedStation cambiato tra due MapLoaded
+                  // Tap marker/selezione: selectedStation cambiato tra due MapLoaded
                   if (prev is MapLoaded && curr is MapLoaded) {
                     return curr.selectedStation != null &&
                         prev.selectedStation?.id != curr.selectedStation?.id;
@@ -210,9 +210,13 @@ class _MapPageState extends State<MapPage> {
                   final loaded = state as MapLoaded;
 
                   // ── Preferiti: seleziona + camera move ──────────────────
-                  if (_pendingHighlightStation != null) {
-                    final station = _pendingHighlightStation!;
+                  final station =
+                      loaded.pendingHighlightStation ?? _pendingHighlightStation;
+                  if (station != null) {
                     setState(() => _pendingHighlightStation = null);
+                    context
+                        .read<MapBloc>()
+                        .add(const ClearPendingHighlightStationEvent());
                     context.read<MapBloc>().add(SelectStationEvent(station));
                     try {
                       _mapController.move(
@@ -220,8 +224,6 @@ class _MapPageState extends State<MapPage> {
                         14.0,
                       );
                     } catch (_) {}
-                    // Lo scroll scatterà quando SelectStationEvent emette
-                    // MapLoaded→MapLoaded (caso tap marker sopra)
                     return;
                   }
 

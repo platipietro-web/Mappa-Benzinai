@@ -22,6 +22,7 @@ import 'package:mappa_prezzi_benzina/presentation/bloc/location_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
 
 const _kCarWashColor = Color(0xFF0891B2);
+const _kDesktopBreakpoint = 768.0;
 
 class CarWashScreen extends StatefulWidget {
   const CarWashScreen({Key? key}) : super(key: key);
@@ -32,6 +33,8 @@ class CarWashScreen extends StatefulWidget {
 
 class _CarWashScreenState extends State<CarWashScreen> {
   final MapController _mapController = MapController();
+  final ScrollController _listScrollController = ScrollController();
+  final ScrollController _mobileScrollController = ScrollController();
   Timer? _refreshTimer;
   LatLng? _lastLoadedCenter;
   bool _isImporting = false;
@@ -42,6 +45,9 @@ class _CarWashScreenState extends State<CarWashScreen> {
   List<GeocodingResult> _searchResults = [];
   Timer? _searchDebounce;
   bool _searchLoading = false;
+
+  // List panel filter: 'all' | 'self' | 'auto' | 'vacuum'
+  String _filterType = 'all';
 
   @override
   void initState() {
@@ -298,34 +304,342 @@ class _CarWashScreenState extends State<CarWashScreen> {
                   loaded = const CarWashLoaded(washes: []);
                 }
 
-                return Column(
+                final isDesktop = MediaQuery.of(context).size.width >= _kDesktopBreakpoint;
+                final filteredWashes = _applyFiltersAndSort(loaded.washes, loaded.userLocation);
+                return isDesktop
+                    ? _buildDesktopLayout(loaded, filteredWashes)
+                    : _buildMobileLayout(loaded, filteredWashes);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<CarWash> _applyFiltersAndSort(List<CarWash> washes, UserLocation? userLocation) {
+    var result = washes.where((w) {
+      switch (_filterType) {
+        case 'self':
+          return w.type != 'automatic';
+        case 'auto':
+          return w.type != 'self-only';
+        case 'vacuum':
+          return w.hasVacuum;
+        default:
+          return true;
+      }
+    }).toList();
+    if (userLocation != null) {
+      result.sort((a, b) => a
+          .getDistanceFromCoordinates(userLocation.latitude, userLocation.longitude)
+          .compareTo(b.getDistanceFromCoordinates(
+              userLocation.latitude, userLocation.longitude)));
+    }
+    return result;
+  }
+
+  // ─── Desktop layout ────────────────────────────────────────────────────────
+
+  Widget _buildDesktopLayout(CarWashLoaded state, List<CarWash> washes) {
+    return Column(
+      children: [
+        _buildAppBar(state),
+        Expanded(
+          child: Row(
+            children: [
+              Container(
+                width: 380,
+                decoration: const BoxDecoration(
+                  color: AppTheme.surfaceColor,
+                  border: Border(right: BorderSide(color: AppTheme.borderColor)),
+                ),
+                child: Column(
                   children: [
-                    _buildAppBar(loaded),
-                    Expanded(
-                      child: Stack(
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+                      decoration: const BoxDecoration(
+                        border: Border(bottom: BorderSide(color: AppTheme.borderColor)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Positioned.fill(
-                            child: CarWashMap(
-                              mapController: _mapController,
-                              washes: loaded.washes,
-                              selectedWash: loaded.selectedWash,
-                              userLocation: loaded.userLocation,
-                              onMarkerTap: _onMarkerTap,
-                            ),
+                          Row(
+                            children: [
+                              const Icon(Icons.local_car_wash,
+                                  size: 15, color: _kCarWashColor),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${washes.length} autolavaggi',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.textSecondaryColor,
+                                ),
+                              ),
+                              const Spacer(),
+                              Text(
+                                'Tap per dettaglio →',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 11,
+                                  color: AppTheme.borderColor,
+                                ),
+                              ),
+                            ],
                           ),
-                          Positioned(
-                            top: 12,
-                            left: 0,
-                            right: 0,
-                            child: Center(child: _buildSearchAreaButton()),
-                          ),
+                          const SizedBox(height: 8),
+                          _buildFilterBar(),
                         ],
                       ),
                     ),
+                    Expanded(
+                      child: washes.isEmpty
+                          ? _buildEmptyList()
+                          : ListView.builder(
+                              controller: _listScrollController,
+                              padding: const EdgeInsets.all(12),
+                              itemCount: washes.length,
+                              itemBuilder: (context, i) {
+                                final wash = washes[i];
+                                final isSelected =
+                                    state.selectedWash?.id == wash.id;
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 10),
+                                  child: _CarWashCard(
+                                    wash: wash,
+                                    userLocation: state.userLocation,
+                                    isSelected: isSelected,
+                                    onTap: () => _onMarkerTap(wash),
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
                   ],
-                );
-              },
+                ),
+              ),
+              Expanded(
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: CarWashMap(
+                        mapController: _mapController,
+                        washes: state.washes,
+                        selectedWash: state.selectedWash,
+                        userLocation: state.userLocation,
+                        onMarkerTap: _onMarkerTap,
+                      ),
+                    ),
+                    Positioned(
+                      top: 12,
+                      left: 0,
+                      right: 0,
+                      child: Center(child: _buildSearchAreaButton()),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─── Mobile layout ─────────────────────────────────────────────────────────
+
+  Widget _buildMobileLayout(CarWashLoaded state, List<CarWash> washes) {
+    return Column(
+      children: [
+        _buildAppBar(state),
+        Expanded(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                bottom: 260,
+                child: CarWashMap(
+                  mapController: _mapController,
+                  washes: state.washes,
+                  selectedWash: state.selectedWash,
+                  userLocation: state.userLocation,
+                  onMarkerTap: _onMarkerTap,
+                ),
+              ),
+              Positioned(
+                top: 12,
+                left: 0,
+                right: 0,
+                child: Center(child: _buildSearchAreaButton()),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: _buildMobileBottomPanel(state, washes),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileBottomPanel(CarWashLoaded state, List<CarWash> washes) {
+    return Container(
+      height: 260,
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 10, bottom: 4),
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppTheme.borderColor,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
+          ),
+          SizedBox(
+            height: 34,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              children: [
+                _filterChip('all', 'Tutti', Icons.local_car_wash_outlined),
+                const SizedBox(width: 6),
+                _filterChip('self', 'Self-service', Icons.handyman_outlined),
+                const SizedBox(width: 6),
+                _filterChip('auto', 'Rulli', Icons.settings_outlined),
+                const SizedBox(width: 6),
+                _filterChip('vacuum', 'Aspirapolvere', Icons.air),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 2),
+            child: Row(
+              children: [
+                Icon(Icons.local_car_wash,
+                    size: 13, color: _kCarWashColor.withOpacity(0.7)),
+                const SizedBox(width: 6),
+                Text(
+                  '${washes.length} autolavaggi nell\'area',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondaryColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: washes.isEmpty
+                ? _buildEmptyList()
+                : ListView.builder(
+                    controller: _mobileScrollController,
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+                    itemCount: washes.length,
+                    itemBuilder: (context, i) {
+                      final wash = washes[i];
+                      final isSelected = state.selectedWash?.id == wash.id;
+                      return SizedBox(
+                        width: 260,
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 10),
+                          child: _CarWashCard(
+                            wash: wash,
+                            userLocation: state.userLocation,
+                            isSelected: isSelected,
+                            onTap: () => _onMarkerTap(wash),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterBar() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _filterChip('all', 'Tutti', Icons.local_car_wash_outlined),
+          const SizedBox(width: 6),
+          _filterChip('self', 'Self-service', Icons.handyman_outlined),
+          const SizedBox(width: 6),
+          _filterChip('auto', 'Rulli', Icons.settings_outlined),
+          const SizedBox(width: 6),
+          _filterChip('vacuum', 'Aspirapolvere', Icons.air),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterChip(String value, String label, IconData icon) {
+    final selected = _filterType == value;
+    return GestureDetector(
+      onTap: () => setState(() => _filterType = value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: selected ? _kCarWashColor : AppTheme.backgroundColor,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? _kCarWashColor : AppTheme.borderColor,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon,
+                size: 13,
+                color: selected ? Colors.white : AppTheme.textSecondaryColor),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: selected ? Colors.white : AppTheme.textSecondaryColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyList() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.search_off, size: 32, color: AppTheme.borderColor),
+          const SizedBox(height: 8),
+          Text(
+            'Nessun autolavaggio\nnell\'area visibile',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.poppins(
+                fontSize: 12, color: AppTheme.textSecondaryColor),
           ),
         ],
       ),
@@ -1023,6 +1337,178 @@ class _CarWashScreenState extends State<CarWashScreen> {
     _searchDebounce?.cancel();
     _searchController.dispose();
     _mapController.dispose();
+    _listScrollController.dispose();
+    _mobileScrollController.dispose();
     super.dispose();
+  }
+}
+
+class _CarWashCard extends StatelessWidget {
+  final CarWash wash;
+  final VoidCallback onTap;
+  final bool isSelected;
+  final UserLocation? userLocation;
+
+  const _CarWashCard({
+    required this.wash,
+    required this.onTap,
+    this.isSelected = false,
+    this.userLocation,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final authState = context.watch<AuthBloc>().state;
+    final favState = context.watch<CarWashFavoritesBloc>().state;
+    final isLoggedIn = authState is Authenticated && !authState.isAnonymous;
+    final isFav = favState.isFavorite(wash.id);
+
+    final hasSelf = wash.type != 'automatic';
+    final hasAuto = wash.type != 'self-only';
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Card(
+        elevation: isSelected ? 6 : 0,
+        color: isSelected
+            ? _kCarWashColor.withOpacity(0.1)
+            : AppTheme.surfaceColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: isSelected ? _kCarWashColor : AppTheme.borderColor,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      wash.name,
+                      style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textPrimaryColor,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (isLoggedIn) ...[
+                    const SizedBox(width: 4),
+                    GestureDetector(
+                      onTap: () {
+                        context.read<CarWashFavoritesBloc>().add(
+                              ToggleCarWashFavoriteEvent(
+                                userId: authState.userId,
+                                carWash: wash,
+                              ),
+                            );
+                      },
+                      child: Icon(
+                        isFav
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        size: 20,
+                        color: isFav ? Colors.red : AppTheme.textSecondaryColor,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 6),
+              if (wash.address != null && wash.address!.isNotEmpty)
+                Text(
+                  wash.address!,
+                  style: GoogleFonts.poppins(
+                      fontSize: 12, color: AppTheme.textSecondaryColor),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              if (userLocation != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  '${wash.getDistanceFromCoordinates(userLocation!.latitude, userLocation!.longitude).toStringAsFixed(1)} km da te',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: _kCarWashColor,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 5,
+                runSpacing: 4,
+                children: [
+                  if (hasSelf)
+                    _badge('Self-service', Icons.handyman_rounded, _kCarWashColor),
+                  if (hasAuto)
+                    _badge('Rulli', Icons.settings_rounded, const Color(0xFF0E7490)),
+                  if (wash.hasVacuum)
+                    _badge('Aspirapolvere', Icons.air, const Color(0xFF6B7280)),
+                  _paymentBadge(wash.paymentType),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _badge(String label, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 3),
+          Text(label,
+              style: GoogleFonts.poppins(
+                  fontSize: 10, fontWeight: FontWeight.w600, color: color)),
+        ],
+      ),
+    );
+  }
+
+  Widget _paymentBadge(String paymentType) {
+    final label = paymentType == 'card'
+        ? 'Carta'
+        : paymentType == 'both'
+            ? 'Monete/Carta'
+            : 'Monete';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppTheme.borderColor.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.payment_rounded, size: 11, color: AppTheme.textSecondaryColor),
+          const SizedBox(width: 3),
+          Text(label,
+              style: GoogleFonts.poppins(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textSecondaryColor)),
+        ],
+      ),
+    );
   }
 }
