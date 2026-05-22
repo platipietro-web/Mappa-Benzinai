@@ -198,6 +198,30 @@ class _CarWashScreenState extends State<CarWashScreen> {
     }
   }
 
+  Future<void> _confirmOpenMaps(
+      double lat, double lon, String address) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Apri in Maps'),
+        content: Text(address.isNotEmpty
+            ? address
+            : 'Vuoi aprire la posizione in Google Maps?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annulla'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Apri Maps'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await _openMaps(lat, lon);
+  }
+
   Future<String?> _reverseGeocode(double lat, double lon) async {
     try {
       final uri = Uri.parse(
@@ -410,6 +434,13 @@ class _CarWashScreenState extends State<CarWashScreen> {
                                     userLocation: state.userLocation,
                                     isSelected: isSelected,
                                     onTap: () => _onMarkerTap(wash),
+                                    onAddressTap: (wash.address?.isNotEmpty ?? false)
+                                        ? () => _confirmOpenMaps(
+                                              wash.latitude,
+                                              wash.longitude,
+                                              wash.address ?? '',
+                                            )
+                                        : null,
                                   ),
                                 );
                               },
@@ -565,6 +596,13 @@ class _CarWashScreenState extends State<CarWashScreen> {
                             userLocation: state.userLocation,
                             isSelected: isSelected,
                             onTap: () => _onMarkerTap(wash),
+                            onAddressTap: (wash.address?.isNotEmpty ?? false)
+                                ? () => _confirmOpenMaps(
+                                      wash.latitude,
+                                      wash.longitude,
+                                      wash.address ?? '',
+                                    )
+                                : null,
                           ),
                         ),
                       );
@@ -1088,7 +1126,11 @@ class _CarWashScreenState extends State<CarWashScreen> {
                       'Indirizzo',
                       onTap: isGeocoding
                           ? null
-                          : () => _openMaps(wash.latitude, wash.longitude),
+                          : () => _confirmOpenMaps(
+                                wash.latitude,
+                                wash.longitude,
+                                resolvedAddress ?? '',
+                              ),
                     ),
                     const SizedBox(height: 10),
                     _detailRow(
@@ -1348,12 +1390,14 @@ class _CarWashCard extends StatelessWidget {
   final VoidCallback onTap;
   final bool isSelected;
   final UserLocation? userLocation;
+  final VoidCallback? onAddressTap;
 
   const _CarWashCard({
     required this.wash,
     required this.onTap,
     this.isSelected = false,
     this.userLocation,
+    this.onAddressTap,
   });
 
   @override
@@ -1425,12 +1469,33 @@ class _CarWashCard extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               if (wash.address != null && wash.address!.isNotEmpty)
-                Text(
-                  wash.address!,
-                  style: GoogleFonts.poppins(
-                      fontSize: 12, color: AppTheme.textSecondaryColor),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                GestureDetector(
+                  onTap: onAddressTap,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          wash.address!,
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: onAddressTap != null
+                                ? AppTheme.primaryColor
+                                : AppTheme.textSecondaryColor,
+                            decoration: onAddressTap != null
+                                ? TextDecoration.underline
+                                : TextDecoration.none,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (onAddressTap != null) ...[
+                        const SizedBox(width: 4),
+                        const Icon(Icons.open_in_new,
+                            size: 12, color: AppTheme.primaryColor),
+                      ],
+                    ],
+                  ),
                 ),
               if (userLocation != null) ...[
                 const SizedBox(height: 4),

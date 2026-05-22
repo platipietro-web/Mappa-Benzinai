@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/auth_bloc.dart';
+import 'package:mappa_prezzi_benzina/presentation/pages/legal_page.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
 
 class AuthPage extends StatefulWidget {
@@ -19,6 +20,7 @@ class _AuthPageState extends State<AuthPage> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _privacyAccepted = false;
 
   @override
   void initState() {
@@ -50,6 +52,10 @@ class _AuthPageState extends State<AuthPage> {
 
     if (_isSignUp && name.isEmpty) {
       _showSnackbar(context, 'Inserisci nome e cognome');
+      return;
+    }
+    if (_isSignUp && !_privacyAccepted) {
+      _showSnackbar(context, 'Devi accettare la Privacy Policy per registrarti');
       return;
     }
     if (email.isEmpty || !email.contains('@')) {
@@ -235,7 +241,68 @@ class _AuthPageState extends State<AuthPage> {
                         prefixIcon: Icon(Icons.lock_outlined),
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
+                    // Consenso Privacy Policy (GDPR)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Checkbox(
+                          value: _privacyAccepted,
+                          onChanged: isLoading
+                              ? null
+                              : (v) => setState(
+                                  () => _privacyAccepted = v ?? false),
+                          activeColor: AppTheme.primaryColor,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: isLoading
+                                ? null
+                                : () => setState(() =>
+                                    _privacyAccepted = !_privacyAccepted),
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: RichText(
+                                text: TextSpan(
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    color: AppTheme.textSecondaryColor,
+                                  ),
+                                  children: [
+                                    const TextSpan(
+                                        text: 'Ho letto e accetto la '),
+                                    WidgetSpan(
+                                      child: GestureDetector(
+                                        onTap: () => Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                              builder: (_) =>
+                                                  const LegalPage()),
+                                        ),
+                                        child: Text(
+                                          'Privacy Policy',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppTheme.primaryColor,
+                                            decoration:
+                                                TextDecoration.underline,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
                   ] else ...[
                     Align(
                       alignment: Alignment.centerRight,

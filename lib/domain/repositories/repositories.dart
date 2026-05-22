@@ -32,6 +32,7 @@ abstract class AuthRepository {
   Future<void> signInWithEmail(String email, String password);
   Future<void> signInAnonymously();
   Future<void> signOut();
+  Future<void> deleteAccount();
   String? getCurrentUserId();
   bool isCurrentUserAnonymous();
   Stream<String?> authStateChanges();

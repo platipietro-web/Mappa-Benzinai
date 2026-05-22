@@ -85,4 +85,18 @@ class AuthRepositoryImpl implements AuthRepository {
       rethrow;
     }
   }
+
+  @override
+  Future<void> deleteAccount() async {
+    try {
+      final userId = getCurrentUserId();
+      if (userId != null) {
+        await _firestoreService.deleteUserData(userId);
+      }
+      await _authService.deleteAccount();
+    } catch (e) {
+      logError('Error in deleteAccount repository', e);
+      rethrow;
+    }
+  }
 }

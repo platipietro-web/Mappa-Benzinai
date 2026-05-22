@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mappa_prezzi_benzina/core/constants/app_constants.dart';
-import 'package:mappa_prezzi_benzina/domain/entities/saved_station.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/vehicle_profile.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/auth_bloc.dart';
-import 'package:mappa_prezzi_benzina/presentation/bloc/favorites_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/user_profile_bloc.dart';
+import 'package:mappa_prezzi_benzina/presentation/pages/legal_page.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
 import 'package:uuid/uuid.dart';
 
@@ -27,7 +26,6 @@ class ProfilePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authState = context.watch<AuthBloc>().state;
-    final favState = context.watch<FavoritesBloc>().state;
 
     final isAnonymous =
         authState is Authenticated ? authState.isAnonymous : true;
@@ -106,16 +104,8 @@ class ProfilePage extends StatelessWidget {
 
             const SizedBox(height: 32),
 
-            // Sezione preferiti (solo utenti registrati)
+            // Sezione utente registrato
             if (!isAnonymous) ...[
-              _FavoritesPreview(
-                stations: favState.stations,
-                count: favState.ids.length,
-                isLoading: favState.isLoading,
-                onViewAll: () => Navigator.pushNamed(context, '/favorites'),
-              ),
-              const SizedBox(height: 12),
-
               // Dashboard link
               _InfoCard(
                 icon: Icons.bar_chart_rounded,
@@ -124,7 +114,7 @@ class ProfilePage extends StatelessWidget {
                 value: '',
                 onTap: () => Navigator.pushNamed(context, '/dashboard'),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 12),
 
               // Veicoli
               const _VehiclesSection(),
@@ -207,6 +197,31 @@ class ProfilePage extends StatelessWidget {
               const SizedBox(height: 12),
             ],
 
+            // Privacy Policy
+            _InfoCard(
+              icon: Icons.privacy_tip_outlined,
+              iconColor: AppTheme.textSecondaryColor,
+              title: 'Informativa sulla Privacy',
+              value: '',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LegalPage()),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Elimina account (solo utenti registrati)
+            if (!isAnonymous) ...[
+              _InfoCard(
+                icon: Icons.delete_forever_rounded,
+                iconColor: AppTheme.errorColor,
+                title: 'Elimina account',
+                value: '',
+                onTap: () => _confirmDeleteAccount(context),
+              ),
+              const SizedBox(height: 12),
+            ],
+
             // Logout
             _InfoCard(
               icon: Icons.logout_rounded,
@@ -251,179 +266,33 @@ class ProfilePage extends StatelessWidget {
       ),
     );
   }
-}
 
-class _FavoritesPreview extends StatelessWidget {
-  final List<SavedStation> stations;
-  final int count;
-  final bool isLoading;
-  final VoidCallback onViewAll;
-
-  const _FavoritesPreview({
-    required this.stations,
-    required this.count,
-    required this.isLoading,
-    required this.onViewAll,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.borderColor),
-      ),
-      child: Column(
-        children: [
-          // Header
-          InkWell(
-            onTap: onViewAll,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(
-                children: [
-                  const Icon(Icons.favorite_rounded, color: Colors.red, size: 22),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      'Stazioni preferite',
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: AppTheme.textPrimaryColor,
-                      ),
-                    ),
-                  ),
-                  if (count > 0)
-                    Text(
-                      '$count',
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primaryColor,
-                      ),
-                    ),
-                  const SizedBox(width: 8),
-                  const Icon(Icons.chevron_right_rounded,
-                      color: AppTheme.textSecondaryColor, size: 20),
-                ],
-              ),
-            ),
+  void _confirmDeleteAccount(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Elimina account',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+        content: Text(
+          'Questa azione è irreversibile. Tutti i tuoi dati (preferiti, veicoli, rifornimenti) '
+          'saranno eliminati definitivamente.',
+          style: GoogleFonts.poppins(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annulla'),
           ),
-
-          // Lista preview (max 3)
-          if (isLoading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-            )
-          else if (stations.isEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-              child: Text(
-                'Nessuna stazione preferita ancora.',
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  color: AppTheme.textSecondaryColor,
-                ),
-              ),
-            )
-          else ...[
-            const Divider(height: 1, color: AppTheme.borderColor),
-            ...stations.take(3).map((s) => _StationPreviewRow(station: s)),
-            if (stations.length > 3) ...[
-              const Divider(height: 1, color: AppTheme.borderColor),
-              InkWell(
-                onTap: onViewAll,
-                borderRadius:
-                    const BorderRadius.vertical(bottom: Radius.circular(12)),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Center(
-                    child: Text(
-                      'Vedi tutti (${stations.length})',
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.primaryColor,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _StationPreviewRow extends StatelessWidget {
-  final SavedStation station;
-  const _StationPreviewRow({required this.station});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppTheme.borderColor)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            station.name,
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.textPrimaryColor,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.errorColor),
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.pop(context);
+              context.read<AuthBloc>().add(const DeleteAccountEvent());
+            },
+            child: const Text('Elimina'),
           ),
-          const SizedBox(height: 2),
-          Text(
-            station.address,
-            style: GoogleFonts.poppins(
-              fontSize: 11,
-              color: AppTheme.textSecondaryColor,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          if (station.prices.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: station.prices.entries.map((e) {
-                  final color = _fuelColor(e.key);
-                  return Container(
-                    margin: const EdgeInsets.only(right: 6),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 7, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(5),
-                      border: Border.all(color: color.withOpacity(0.3)),
-                    ),
-                    child: Text(
-                      '${e.key}  €${e.value.toStringAsFixed(3)}',
-                      style: GoogleFonts.poppins(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: color,
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ],
         ],
       ),
     );

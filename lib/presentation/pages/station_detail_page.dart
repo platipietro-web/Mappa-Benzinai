@@ -645,7 +645,8 @@ class _StationDetailPageState extends State<StationDetailPage> {
             _badge('OpenStreetMap', Colors.orange),
             const SizedBox(height: 8),
           ],
-          _inlineInfo(Icons.location_on, station.address),
+          _inlineInfo(Icons.location_on, station.address,
+              onTap: () => _openMaps(station.latitude, station.longitude, station.address)),
         ],
       ),
     );
@@ -870,7 +871,7 @@ class _StationDetailPageState extends State<StationDetailPage> {
             station.address.isNotEmpty
                 ? station.address
                 : 'Indirizzo non disponibile',
-            onTap: () => _openMaps(station.latitude, station.longitude),
+            onTap: () => _openMaps(station.latitude, station.longitude, station.address),
           ),
           const SizedBox(height: 10),
           _infoTile(
@@ -928,8 +929,8 @@ class _StationDetailPageState extends State<StationDetailPage> {
 
   // ─── Widget helpers ────────────────────────────────────────────────────────
 
-  Widget _inlineInfo(IconData icon, String text) {
-    return Row(
+  Widget _inlineInfo(IconData icon, String text, {VoidCallback? onTap}) {
+    final row = Row(
       children: [
         Icon(icon, size: 16, color: AppTheme.textSecondaryColor),
         const SizedBox(width: 6),
@@ -937,14 +938,46 @@ class _StationDetailPageState extends State<StationDetailPage> {
           child: Text(
             text.isNotEmpty ? text : 'Indirizzo non disponibile',
             style: GoogleFonts.poppins(
-                fontSize: 14, color: AppTheme.textSecondaryColor),
+              fontSize: 14,
+              color: onTap != null
+                  ? AppTheme.primaryColor
+                  : AppTheme.textSecondaryColor,
+              decoration:
+                  onTap != null ? TextDecoration.underline : TextDecoration.none,
+            ),
           ),
         ),
+        if (onTap != null) ...[
+          const SizedBox(width: 4),
+          const Icon(Icons.open_in_new, size: 14, color: AppTheme.primaryColor),
+        ],
       ],
     );
+    if (onTap == null) return row;
+    return GestureDetector(onTap: onTap, child: row);
   }
 
-  Future<void> _openMaps(double lat, double lon) async {
+  Future<void> _openMaps(double lat, double lon, String address) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Apri in Maps'),
+        content: Text(
+          address.isNotEmpty ? address : 'Vuoi aprire la posizione in Google Maps?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annulla'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Apri Maps'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
     final uri = Uri.parse(
       'https://www.google.com/maps/dir/?api=1&destination=$lat,$lon',
     );

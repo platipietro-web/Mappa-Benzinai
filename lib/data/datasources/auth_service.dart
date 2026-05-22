@@ -7,6 +7,7 @@ abstract class AuthService {
   Future<UserCredential?> signInWithEmail(String email, String password);
   Future<UserCredential?> signInAnonymously();
   Future<void> signOut();
+  Future<void> deleteAccount();
   User? getCurrentUser();
   Stream<User?> authStateChanges();
   Future<void> resetPassword(String email);
@@ -76,6 +77,22 @@ class AuthServiceImpl implements AuthService {
     } catch (e) {
       logError('Sign out error', e);
       throw AuthException(message: 'Sign out failed');
+    }
+  }
+
+  @override
+  Future<void> deleteAccount() async {
+    try {
+      final user = _firebaseAuth.currentUser;
+      if (user == null) throw AuthException(message: 'No user logged in');
+      logInfo('Deleting account: ${user.uid}');
+      await user.delete();
+    } on FirebaseAuthException catch (e) {
+      logError('Delete account error', e);
+      throw AuthException(message: _getAuthErrorMessage(e.code));
+    } catch (e) {
+      logError('Unexpected error during account deletion', e);
+      throw AuthException(message: 'Account deletion failed');
     }
   }
 

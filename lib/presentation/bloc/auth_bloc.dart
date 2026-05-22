@@ -61,6 +61,10 @@ class ResetPasswordEvent extends AuthEvent {
   List<Object?> get props => [email];
 }
 
+class DeleteAccountEvent extends AuthEvent {
+  const DeleteAccountEvent();
+}
+
 // States
 abstract class AuthState extends Equatable {
   const AuthState();
@@ -115,6 +119,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<SignOutEvent>(_onSignOut);
     on<AuthStatusChangedEvent>(_onAuthStatusChanged);
     on<ResetPasswordEvent>(_onResetPassword);
+    on<DeleteAccountEvent>(_onDeleteAccount);
 
     // Listen to auth state changes
     _authRepository.authStateChanges().listen((userId) {
@@ -209,6 +214,19 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     try {
       await _authRepository.resetPassword(event.email);
       emit(const AuthInitial());
+    } catch (e) {
+      emit(AuthError(e.toString()));
+    }
+  }
+
+  Future<void> _onDeleteAccount(
+    DeleteAccountEvent event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(const AuthLoading());
+    try {
+      await _authRepository.deleteAccount();
+      emit(const Unauthenticated());
     } catch (e) {
       emit(AuthError(e.toString()));
     }

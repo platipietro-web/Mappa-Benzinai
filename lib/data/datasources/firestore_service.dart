@@ -49,6 +49,9 @@ abstract class FirestoreService {
   // ── Log rifornimenti ───────────────────────────────────────────────────────
   Future<void> addRefuelingLog(RefuelingLogModel log);
   Future<List<RefuelingLog>> getRefuelingLogs(String userId);
+
+  // ── Cancellazione account (GDPR) ───────────────────────────────────────────
+  Future<void> deleteUserData(String userId);
 }
 
 class FirestoreServiceImpl implements FirestoreService {
@@ -420,6 +423,32 @@ class FirestoreServiceImpl implements FirestoreService {
       logError('Firestore: error fetching refueling logs', e);
       throw DatabaseException(
           message: 'Impossibile caricare i rifornimenti');
+    }
+  }
+
+  @override
+  Future<void> deleteUserData(String userId) async {
+    try {
+      final userRef = _firestore
+          .collection(AppConstants.usersCollection)
+          .doc(userId);
+
+      for (final sub in [
+        AppConstants.favoritesCollection,
+        AppConstants.carWashFavoritesCollection,
+        AppConstants.refuelingLogsCollection,
+      ]) {
+        final docs = await userRef.collection(sub).get();
+        for (final doc in docs.docs) {
+          await doc.reference.delete();
+        }
+      }
+
+      await userRef.delete();
+      logInfo('Firestore: user data deleted for $userId');
+    } catch (e) {
+      logError('Firestore: error deleting user data', e);
+      throw DatabaseException(message: 'Impossibile eliminare i dati utente');
     }
   }
 }

@@ -115,7 +115,31 @@ class GasStationRepositoryImpl implements GasStationRepository {
   @override
   Future<List<SavedStation>> getFavorites(String userId) async {
     try {
-      return await _firestoreService.getFavorites(userId);
+      final saved = await _firestoreService.getFavorites(userId);
+      if (saved.isEmpty) return saved;
+
+      // For any station missing prices, fetch current data from MIMIT API
+      final missingIds =
+          saved.where((s) => s.prices.isEmpty).map((s) => s.id).toList();
+      if (missingIds.isEmpty) return saved;
+
+      final apiMap = await _fuelPriceApi.getStationsByIds(missingIds);
+
+      return saved.map((s) {
+        if (s.prices.isEmpty && apiMap.containsKey(s.id)) {
+          return SavedStation(
+            id: s.id,
+            name: s.name,
+            address: s.address,
+            brand: s.brand,
+            latitude: s.latitude,
+            longitude: s.longitude,
+            addedAt: s.addedAt,
+            prices: apiMap[s.id]!.prices,
+          );
+        }
+        return s;
+      }).toList();
     } catch (e) {
       logError('Error in getFavorites repository', e);
       rethrow;

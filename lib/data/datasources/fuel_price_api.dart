@@ -45,6 +45,9 @@ abstract class FuelPriceApi {
     UserLocation location,
     double radiusKm,
   );
+
+  /// Returns a map of id → station for the requested IDs, using cached data.
+  Future<Map<String, GasStationModel>> getStationsByIds(List<String> ids);
 }
 
 class FuelPriceApiImpl implements FuelPriceApi {
@@ -95,6 +98,17 @@ class FuelPriceApiImpl implements FuelPriceApi {
       logError('Unexpected error fetching stations', e);
       return _getOpenStreetMapStations(location, radiusKm);
     }
+  }
+
+  @override
+  Future<Map<String, GasStationModel>> getStationsByIds(
+      List<String> ids) async {
+    if (ids.isEmpty) return {};
+    final all = await _loadAllStations();
+    final idSet = ids.toSet();
+    return Map.fromEntries(
+      all.where((s) => idSet.contains(s.id)).map((s) => MapEntry(s.id, s)),
+    );
   }
 
   // ─── CSV Loading ───────────────────────────────────────────────────────────

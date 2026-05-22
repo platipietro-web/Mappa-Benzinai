@@ -6,6 +6,7 @@ import 'package:mappa_prezzi_benzina/domain/entities/user_location.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/auth_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/favorites_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 Color _fuelColor(String fuelType) {
   final n = fuelType.toLowerCase();
@@ -125,16 +126,29 @@ class StationCard extends StatelessWidget {
               const SizedBox(height: 6),
 
               // ── Indirizzo ──────────────────────────────────────────────
-              Text(
-                station.address.isNotEmpty
-                    ? station.address
-                    : 'Indirizzo non disponibile',
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  color: AppTheme.textSecondaryColor,
+              GestureDetector(
+                onTap: () => _confirmOpenMaps(context, station),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        station.address.isNotEmpty
+                            ? station.address
+                            : 'Indirizzo non disponibile',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: AppTheme.primaryColor,
+                          decoration: TextDecoration.underline,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.open_in_new,
+                        size: 12, color: AppTheme.primaryColor),
+                  ],
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
 
               // ── Distanza ───────────────────────────────────────────────
@@ -224,6 +238,40 @@ class StationCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmOpenMaps(BuildContext context, GasStation station) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Apri in Maps'),
+        content: Text(station.address.isNotEmpty
+            ? station.address
+            : 'Vuoi aprire la posizione in Google Maps?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annulla'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Apri Maps'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final uri = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1&destination='
+      '${station.latitude},${station.longitude}',
+    );
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Impossibile aprire Maps')),
+        );
+      }
+    }
   }
 
   void _toggleFavorite(

@@ -21,6 +21,7 @@ import 'package:mappa_prezzi_benzina/presentation/pages/favorites_page.dart';
 import 'package:mappa_prezzi_benzina/presentation/pages/profile_page.dart';
 import 'package:mappa_prezzi_benzina/features/carwash/carwash_bloc.dart';
 import 'package:mappa_prezzi_benzina/features/carwash/carwash_favorites_bloc.dart';
+import 'package:mappa_prezzi_benzina/presentation/pages/legal_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -102,6 +103,7 @@ class MyApp extends StatelessWidget {
           '/profile': (context) => const ProfilePage(),
           '/favorites': (context) => const FavoritesPage(),
           '/dashboard': (context) => const DashboardPage(),
+          '/legal': (context) => const LegalPage(),
           '/station-detail': (context) {
             final arguments = ModalRoute.of(context)?.settings.arguments;
             final station = arguments is Map<String, Object?>

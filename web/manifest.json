@@ -1,13 +1,15 @@
 {
-    "name": "Prezzi Benzina",
-    "short_name": "Benzina",
+    "name": "Mappa Benzinai — Prezzi Carburante",
+    "short_name": "Mappa Benzinai",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#ffffff",
     "theme_color": "#0175C2",
-    "description": "Mappa prezzi benzina in tempo reale",
+    "description": "Trova i prezzi di benzina, diesel e GPL più convenienti vicino a te in tutta Italia.",
+    "lang": "it",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
+    "categories": ["navigation", "utilities"],
     "icons": [
         {
             "src": "icons/Icon-192.png",

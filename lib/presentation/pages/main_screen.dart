@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:mappa_prezzi_benzina/core/services/service_locator.dart';
 import 'package:mappa_prezzi_benzina/features/carwash/carwash_screen.dart';
+import 'package:mappa_prezzi_benzina/presentation/pages/favorites_page.dart';
 import 'package:mappa_prezzi_benzina/presentation/pages/map_page.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
+
+// Sempre 3 tab fissi: 0=Carburante, 1=Preferiti, 2=Autolavaggio.
+// FavoritesPage gestisce internamente il caso utente non loggato.
 
 class MainScreen extends StatefulWidget {
   const MainScreen({Key? key}) : super(key: key);
@@ -12,12 +16,10 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int _currentIndex = 0;
+  int _index = 0;
   late final ValueNotifier<int> _tabNotifier;
 
-  // IndexedStack keeps both pages alive so they retain their state
-  // (map position, loaded stations, etc.) across tab switches.
-  late final List<Widget> _pages = const [MapPage(), CarWashScreen()];
+  static const _pages = [MapPage(), FavoritesPage(), CarWashScreen()];
 
   @override
   void initState() {
@@ -33,8 +35,8 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _onExternalTabChange() {
-    if (mounted && _tabNotifier.value != _currentIndex) {
-      setState(() => _currentIndex = _tabNotifier.value);
+    if (mounted && _tabNotifier.value != _index) {
+      setState(() => _index = _tabNotifier.value);
     }
   }
 
@@ -42,32 +44,35 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(
-        index: _currentIndex,
+        index: _index,
         children: _pages,
       ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (i) => setState(() => _currentIndex = i),
+        selectedIndex: _index,
+        onDestinationSelected: (i) => setState(() => _index = i),
         backgroundColor: AppTheme.surfaceColor,
         indicatorColor: AppTheme.primaryColor.withOpacity(0.12),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        destinations: [
+        destinations: const [
           NavigationDestination(
-            icon: const Icon(Icons.local_gas_station_outlined),
-            selectedIcon: const Icon(Icons.local_gas_station,
+            icon: Icon(Icons.local_gas_station_outlined),
+            selectedIcon: Icon(Icons.local_gas_station,
                 color: AppTheme.primaryColor),
-            label: _navLabel('Carburante'),
+            label: 'Carburante',
           ),
           NavigationDestination(
-            icon: const Icon(Icons.local_car_wash_outlined),
-            selectedIcon: const Icon(Icons.local_car_wash,
+            icon: Icon(Icons.favorite_border_rounded),
+            selectedIcon: Icon(Icons.favorite_rounded, color: Colors.red),
+            label: 'Preferiti',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.local_car_wash_outlined),
+            selectedIcon: Icon(Icons.local_car_wash,
                 color: Color(0xFF0891B2)),
-            label: _navLabel('Autolavaggio'),
+            label: 'Autolavaggio',
           ),
         ],
       ),
     );
   }
-
-  String _navLabel(String text) => text;
 }
