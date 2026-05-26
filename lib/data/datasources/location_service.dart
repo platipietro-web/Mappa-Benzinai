@@ -29,7 +29,7 @@ class LocationServiceImpl implements LocationService {
         timeLimit: const Duration(seconds: 10),
       );
 
-      logInfo('Location obtained: ${position.latitude}, ${position.longitude}');
+      logInfo('Location obtained successfully');
 
       return UserLocation(
         latitude: position.latitude,

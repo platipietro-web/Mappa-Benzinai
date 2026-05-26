@@ -37,12 +37,14 @@ class StationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final authState = context.watch<AuthBloc>().state;
-    final favState = context.watch<FavoritesBloc>().state;
-
-    final isLoggedIn =
-        authState is Authenticated && !authState.isAnonymous;
-    final isFav = favState.isFavorite(station.id);
+    // context.select → questa card si ricostruisce SOLO quando cambia
+    // il suo specifico valore, non ad ogni cambio di auth o preferiti.
+    final isLoggedIn = context.select<AuthBloc, bool>((b) =>
+        b.state is Authenticated &&
+        !(b.state as Authenticated).isAnonymous);
+    final isFav = context.select<FavoritesBloc, bool>(
+        (b) => b.state.isFavorite(station.id));
+    final authState = context.read<AuthBloc>().state;
 
     return GestureDetector(
       onTap: onTap,

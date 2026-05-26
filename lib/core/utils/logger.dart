@@ -1,6 +1,9 @@
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:logger/logger.dart';
 
 final logger = Logger(
+  // In produzione disabilita tutti i log: nessun dato personale esposto
+  filter: kReleaseMode ? ProductionFilter() : DevelopmentFilter(),
   printer: PrettyPrinter(
     methodCount: 2,
     errorMethodCount: 8,
@@ -8,6 +11,8 @@ final logger = Logger(
     colors: true,
     printEmojis: true,
   ),
+  // In release i livelli sotto WARNING sono silenziati da ProductionFilter
+  level: kReleaseMode ? Level.warning : Level.trace,
 );
 
 void logInfo(String message) => logger.i(message);

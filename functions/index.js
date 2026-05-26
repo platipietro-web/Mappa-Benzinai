@@ -29,10 +29,17 @@ function fetchText(url) {
 }
 
 // ─── Helper: aggiungi CORS headers ────────────────────────────────────────────
+// Access-Control-Allow-Origin: '*' è sicuro qui perché:
+// 1. Questi endpoint servono solo dati pubblici MIMIT (nessun dato utente)
+// 2. Le app native (Android/iOS) non inviano header Origin → CORS non si applica
+// 3. Non è richiesta autenticazione → nessun rischio CSRF
 function setCorsHeaders(res) {
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.set('Access-Control-Allow-Headers', 'Content-Type');
+  // Sicurezza aggiuntiva: impedisce uso improprio come iframe
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.set('X-Frame-Options', 'DENY');
 }
 
 // ─── Funzione: /mimitStations ─────────────────────────────────────────────────

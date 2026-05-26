@@ -33,7 +33,7 @@ class LegalPage extends StatelessWidget {
           children: [
             _section(
               'Informativa sulla Privacy',
-              'Ultimo aggiornamento: maggio 2025\n\n'
+              'Ultimo aggiornamento: maggio 2026\n\n'
               'La presente informativa descrive come Mappa Benzinai ("l\'app", "noi") '
               'raccoglie, utilizza e protegge i tuoi dati personali in conformità al '
               'Regolamento Generale sulla Protezione dei Dati (GDPR – Reg. UE 2016/679) '

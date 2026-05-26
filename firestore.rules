@@ -3,28 +3,64 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── Stazioni (lettura pubblica, scrittura autenticati) ─────────────────────
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
+    // Prezzo carburante valido: numero positivo entro un range realistico (€/L)
+    function isValidPrice(price) {
+      return price is number && price > 0.1 && price < 10.0;
+    }
+
+    // Mappa di prezzi valida (es. {"Benzina": 1.85, "Diesel": 1.70})
+    function hasValidPrices(data) {
+      return !('prices' in data) ||
+             data.prices is map;
+    }
+
+    // Stringa non vuota con lunghezza massima
+    function isValidString(val, maxLen) {
+      return val is string && val.size() > 0 && val.size() <= maxLen;
+    }
+
+    // ── Stazioni (lettura pubblica, scrittura autenticati + validazione) ───────
     match /gas_stations/{stationId} {
       allow read: if true;
-      allow write: if request.auth != null;
 
-      // Aggiornamenti prezzi: autenticati
+      // Solo utenti autenticati possono creare/modificare stazioni
+      // I dati devono rispettare i campi attesi
+      allow create: if request.auth != null
+                    && isValidString(request.resource.data.name, 200)
+                    && hasValidPrices(request.resource.data);
+
+      allow update: if request.auth != null
+                    && hasValidPrices(request.resource.data);
+
+      allow delete: if false; // le stazioni non si eliminano dall'app
+
+      // Aggiornamenti prezzi: autenticati + prezzo valido
       match /price_updates/{updateId} {
         allow read: if true;
-        allow create: if request.auth != null;
+        allow create: if request.auth != null
+                      && isValidPrice(request.resource.data.price)
+                      && isValidString(request.resource.data.fuelType, 50);
+        allow update, delete: if false;
       }
 
-      // Storico prezzi: lettura pubblica, scrittura autenticati
+      // Storico prezzi: lettura pubblica, scrittura autenticati + validazione
       match /price_history/{docId} {
         allow read: if true;
-        allow write: if request.auth != null;
+        allow create: if request.auth != null
+                      && isValidPrice(request.resource.data.price);
+        allow update, delete: if false;
       }
     }
 
-    // ── Autolavaggi (lettura pubblica, scrittura autenticati) ────────────────
+    // ── Autolavaggi (lettura pubblica, scrittura autenticati + validazione) ──
     match /car_washes/{washId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow create: if request.auth != null
+                    && isValidString(request.resource.data.name, 200);
+      allow update: if request.auth != null;
+      allow delete: if false;
     }
 
     // ── Utenti (solo il proprietario) ─────────────────────────────────────────
@@ -41,9 +77,15 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
 
-      // Log rifornimenti: solo il proprietario può leggere e scrivere
+      // Log rifornimenti: solo il proprietario + validazione campi obbligatori
       match /refueling_logs/{logId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create: if request.auth != null
+                      && request.auth.uid == userId
+                      && isValidPrice(request.resource.data.pricePerLiter)
+                      && request.resource.data.liters is number
+                      && request.resource.data.liters > 0;
+        allow update, delete: if request.auth != null && request.auth.uid == userId;
       }
     }
   }

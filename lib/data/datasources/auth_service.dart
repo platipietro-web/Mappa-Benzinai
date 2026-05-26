@@ -21,7 +21,7 @@ class AuthServiceImpl implements AuthService {
   @override
   Future<UserCredential?> signUpWithEmail(String email, String password) async {
     try {
-      logInfo('Signing up with email: $email');
+      logInfo('Signing up new user');
       final credential = await _firebaseAuth.createUserWithEmailAndPassword(
         email: email,
         password: password,
@@ -39,7 +39,7 @@ class AuthServiceImpl implements AuthService {
   @override
   Future<UserCredential?> signInWithEmail(String email, String password) async {
     try {
-      logInfo('Signing in with email: $email');
+      logInfo('Signing in with email/password');
       final credential = await _firebaseAuth.signInWithEmailAndPassword(
         email: email,
         password: password,
@@ -85,7 +85,7 @@ class AuthServiceImpl implements AuthService {
     try {
       final user = _firebaseAuth.currentUser;
       if (user == null) throw AuthException(message: 'No user logged in');
-      logInfo('Deleting account: ${user.uid}');
+      logInfo('Deleting current user account');
       await user.delete();
     } on FirebaseAuthException catch (e) {
       logError('Delete account error', e);
@@ -109,7 +109,7 @@ class AuthServiceImpl implements AuthService {
   @override
   Future<void> resetPassword(String email) async {
     try {
-      logInfo('Resetting password for: $email');
+      logInfo('Sending password reset email');
       await _firebaseAuth.sendPasswordResetEmail(email: email);
     } on FirebaseAuthException catch (e) {
       logError('Password reset error', e);

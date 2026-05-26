@@ -35,7 +35,11 @@ class _MapPageState extends State<MapPage> {
   String _sortBy = 'distance';
 
   Timer? _refreshTimer;
+  Timer? _panDebounce;
   LatLng? _lastLoadedCenter;
+  // Raggio dell'ultima query effettuata (km). Usato per sapere se il viewport
+  // corrente è già coperto dai dati in cache senza bisogno di ricaricare.
+  double _lastLoadedRadiusKm = 0;
 
   final Map<String, GlobalKey> _stationKeys = {};
   final ScrollController _mobileScrollController = ScrollController();
@@ -107,15 +111,75 @@ class _MapPageState extends State<MapPage> {
 
   void _searchThisArea() {
     final center = _mapController.camera.center;
+    final radius = _getVisibleRadiusKm();
     _lastLoadedCenter = center;
+    _lastLoadedRadiusKm = radius;
     context.read<MapBloc>().add(LoadNearbyStationsEvent(
           location: UserLocation(
             latitude: center.latitude,
             longitude: center.longitude,
             timestamp: DateTime.now(),
           ),
-          radiusKm: _getVisibleRadiusKm(),
+          radiusKm: radius,
         ));
+  }
+
+  // ── Verifica copertura viewport ──────────────────────────────────────────
+  // Controlla se tutti e 4 gli angoli del viewport corrente sono già coperti
+  // dall'ultima query eseguita (centro + raggio). Se anche un solo angolo è
+  // fuori → i dati potrebbero mancare → ricarica necessaria.
+  // Buffer 15%: inizia a ricaricare un po' prima di toccare il bordo assoluto.
+  bool _isViewportCovered() {
+    if (_lastLoadedCenter == null || _lastLoadedRadiusKm <= 0) return false;
+    try {
+      final bounds = _mapController.camera.visibleBounds;
+      const dist = Distance();
+      final corners = [
+        bounds.northWest,
+        bounds.northEast,
+        bounds.southWest,
+        bounds.southEast,
+      ];
+      for (final corner in corners) {
+        final d = dist.as(LengthUnit.Kilometer, _lastLoadedCenter!, corner);
+        if (d > _lastLoadedRadiusKm * 0.85) return false;
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // ── Auto-search al movimento della mappa ─────────────────────────────────
+  // Intercetta solo eventi utente (drag/fling/zoom), ignora mosse programmatiche.
+  // Guards: debounce 800ms + zoom minimo 8 + viewport coverage check.
+  void _onMapEvent(MapEvent event) {
+    // 1. Ignora mosse programmatiche (marker tap, geocoding, highlight preferiti)
+    if (event.source == MapEventSource.mapController) return;
+
+    // 2. Intercetta solo fine-movimento (non ogni frame del pan)
+    final isEndEvent = event is MapEventMoveEnd ||
+        event is MapEventFlingAnimationEnd ||
+        event is MapEventDoubleTapZoomEnd ||
+        event is MapEventScrollWheelZoom;
+    if (!isEndEvent) return;
+
+    // 3. Debounce: annulla il timer precedente e riparte
+    _panDebounce?.cancel();
+    _panDebounce = Timer(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+
+      // 4. Guard zoom: sotto 8 l'area è troppo grande, saltiamo
+      final zoom = _mapController.camera.zoom;
+      if (zoom < 8.0) return;
+
+      // 5. Guard viewport: se tutti gli angoli sono già coperti dai dati
+      //    in cache, non serve fare una nuova query
+      if (_isViewportCovered()) return;
+
+      // 6. Viewport scoperto → carica le stazioni nella nuova area
+      _searchThisArea();
+    });
   }
 
   /// Click sul marker della mappa:
@@ -175,6 +239,7 @@ class _MapPageState extends State<MapPage> {
                   if (state is LocationLoaded) {
                     _lastLoadedCenter = LatLng(
                         state.location.latitude, state.location.longitude);
+                    _lastLoadedRadiusKm = AppConstants.stationSearchRadius;
                     _loadNearbyStations(state.location);
                   } else if (state is LocationPermissionDenied) {
                     _showLocationDeniedDialog();
@@ -233,7 +298,7 @@ class _MapPageState extends State<MapPage> {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     _scrollToStationInList(
                       stationId,
-                      _filterAndSortStations(loaded.stations),
+                      _filterAndSortStations(loaded.stations, userLocation: loaded.userLocation),
                     );
                   });
                 },
@@ -354,7 +419,7 @@ class _MapPageState extends State<MapPage> {
   // ─── DESKTOP layout ────────────────────────────────────────────────────────
 
   Widget _buildDesktopLayout(MapLoaded state) {
-    final stations = _filterAndSortStations(state.stations);
+    final stations = _filterAndSortStations(state.stations, userLocation: state.userLocation);
 
     return Column(
       children: [
@@ -410,10 +475,12 @@ class _MapPageState extends State<MapPage> {
                     Expanded(
                       child: stations.isEmpty
                           ? _buildEmptyList()
-                          : ListView(
+                          : ListView.builder(
                               controller: _listScrollController,
                               padding: const EdgeInsets.all(12),
-                              children: stations.map((station) {
+                              itemCount: stations.length,
+                              itemBuilder: (ctx, index) {
+                                final station = stations[index];
                                 final isSelected =
                                     state.selectedStation?.id == station.id;
                                 final key = _stationKeys.putIfAbsent(
@@ -430,7 +497,7 @@ class _MapPageState extends State<MapPage> {
                                         _onCardTap(context, station, state),
                                   ),
                                 );
-                              }).toList(),
+                              },
                             ),
                     ),
                   ],
@@ -446,7 +513,7 @@ class _MapPageState extends State<MapPage> {
                       top: 12,
                       left: 0,
                       right: 0,
-                      child: Center(child: _buildSearchAreaButton()),
+                      child: Center(child: _buildAutoLoadIndicator(state)),
                     ),
                   ],
                 ),
@@ -461,7 +528,7 @@ class _MapPageState extends State<MapPage> {
   // ─── MOBILE layout ─────────────────────────────────────────────────────────
 
   Widget _buildMobileLayout(MapLoaded state) {
-    final stations = _filterAndSortStations(state.stations);
+    final stations = _filterAndSortStations(state.stations, userLocation: state.userLocation);
 
     return Column(
       children: [
@@ -473,12 +540,23 @@ class _MapPageState extends State<MapPage> {
                 bottom: 260,
                 child: _buildMap(state, stations),
               ),
+
+              // ── Indicatore auto-load (top center) ────────────────────────
               Positioned(
                 top: 12,
                 left: 0,
                 right: 0,
-                child: Center(child: _buildSearchAreaButton()),
+                child: Center(child: _buildAutoLoadIndicator(state)),
               ),
+
+              // ── FAB controlli mappa (destra) ──────────────────────────────
+              Positioned(
+                right: 12,
+                bottom: 276,
+                child: _buildMapControls(state),
+              ),
+
+              // ── Bottom sheet stazioni ─────────────────────────────────────
               Positioned(
                 left: 0,
                 right: 0,
@@ -489,6 +567,77 @@ class _MapPageState extends State<MapPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildMapControls(MapLoaded state) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Zoom +
+        _mapFab(
+          icon: Icons.add_rounded,
+          tooltip: 'Zoom avanti',
+          onTap: () {
+            final z = (_mapController.camera.zoom + 1).clamp(5.0, 18.0);
+            _mapController.move(_mapController.camera.center, z);
+          },
+        ),
+        const SizedBox(height: 8),
+        // Zoom −
+        _mapFab(
+          icon: Icons.remove_rounded,
+          tooltip: 'Zoom indietro',
+          onTap: () {
+            final z = (_mapController.camera.zoom - 1).clamp(5.0, 18.0);
+            _mapController.move(_mapController.camera.center, z);
+          },
+        ),
+        const SizedBox(height: 8),
+        // La mia posizione
+        if (state.userLocation != null)
+          _mapFab(
+            icon: Icons.my_location_rounded,
+            tooltip: 'La mia posizione',
+            color: AppTheme.primaryColor,
+            iconColor: Colors.white,
+            onTap: () {
+              final loc = state.userLocation!;
+              _mapController.move(LatLng(loc.latitude, loc.longitude), 14);
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _mapFab({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+    Color color = Colors.white,
+    Color iconColor = const Color(0xFF374151),
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Icon(icon, size: 20, color: iconColor),
+        ),
+      ),
     );
   }
 
@@ -608,6 +757,7 @@ class _MapPageState extends State<MapPage> {
     _deactivateSearch();
     final target = LatLng(result.lat, result.lon);
     _lastLoadedCenter = target;
+    _lastLoadedRadiusKm = 15.0;
     try {
       _mapController.move(target, 13.0);
     } catch (_) {}
@@ -781,6 +931,7 @@ class _MapPageState extends State<MapPage> {
           initialZoom: userLocation != null ? 13 : AppConstants.defaultZoom,
           maxZoom: 18,
           minZoom: 5,
+          onMapEvent: _onMapEvent,
         ),
         children: [
           TileLayer(
@@ -871,81 +1022,162 @@ class _MapPageState extends State<MapPage> {
       height: 260,
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 16,
+            color: Colors.black.withOpacity(0.10),
+            blurRadius: 20,
             offset: const Offset(0, -4),
           ),
         ],
       ),
       child: Column(
         children: [
+          // ── Drag handle ────────────────────────────────────────────────
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-            child: Row(
-              children: [
-                const Spacer(),
-                Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppTheme.borderColor,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+            padding: const EdgeInsets.only(top: 10),
+            child: Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppTheme.borderColor,
+                  borderRadius: BorderRadius.circular(2),
                 ),
-                const Spacer(),
-              ],
+              ),
             ),
           ),
+          // ── Header con contatore ───────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Row(
-              children: [
-                const Icon(Icons.local_gas_station,
-                    size: 13, color: AppTheme.textSecondaryColor),
-                const SizedBox(width: 6),
-                Text(
-                  '${stations.length} distributori nell\'area',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textSecondaryColor,
-                  ),
-                ),
-              ],
+            child: BlocBuilder<MapBloc, MapState>(
+              buildWhen: (p, c) =>
+                  (p is MapLoading) != (c is MapLoading),
+              builder: (ctx, mapState) {
+                final loading = mapState is MapLoading;
+                return Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: loading
+                            ? AppTheme.borderColor
+                            : AppTheme.primaryColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: loading
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                SizedBox(
+                                  width: 10,
+                                  height: 10,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 1.5,
+                                    color: AppTheme.primaryColor,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Caricamento...',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.textSecondaryColor,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.local_gas_station,
+                                    size: 12,
+                                    color: AppTheme.primaryColor),
+                                const SizedBox(width: 5),
+                                Text(
+                                  '${stations.length} distributori',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.primaryColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      'Scorri per vedere altri →',
+                      style: GoogleFonts.poppins(
+                        fontSize: 10,
+                        color: AppTheme.textSecondaryColor
+                            .withOpacity(0.6),
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
+
+          // ── Lista card orizzontale ─────────────────────────────────────
           Expanded(
-            child: stations.isEmpty
-                ? _buildEmptyList()
-                : ListView.builder(
-                    controller: _mobileScrollController,
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-                    itemCount: stations.length,
-                    itemBuilder: (context, index) {
-                      final station = stations[index];
-                      final isSelected =
-                          state.selectedStation?.id == station.id;
-                      return SizedBox(
-                        width: 280,
-                        child: Padding(
-                          padding: const EdgeInsets.only(right: 10),
-                          child: StationCard(
-                            station: station,
-                            userLocation: state.userLocation,
-                            isSelected: isSelected,
-                            // Su mobile: click card → dettaglio
-                            onTap: () => _onCardTap(context, station, state),
-                          ),
+            child: BlocBuilder<MapBloc, MapState>(
+              buildWhen: (p, c) =>
+                  (p is MapLoading) != (c is MapLoading),
+              builder: (ctx, mapState) {
+                final loading = mapState is MapLoading && stations.isEmpty;
+                if (loading) {
+                  return _buildSkeletonList();
+                }
+                if (stations.isEmpty) {
+                  return _buildEmptyList();
+                }
+                return ListView.builder(
+                  controller: _mobileScrollController,
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+                  itemCount: stations.length,
+                  itemBuilder: (context, index) {
+                    final station = stations[index];
+                    final isSelected =
+                        state.selectedStation?.id == station.id;
+                    return SizedBox(
+                      width: 280,
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 10),
+                        child: StationCard(
+                          station: station,
+                          userLocation: state.userLocation,
+                          isSelected: isSelected,
+                          onTap: () =>
+                              _onCardTap(context, station, state),
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSkeletonList() {
+    return ListView.builder(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+      itemCount: 4,
+      itemBuilder: (ctx, _) => SizedBox(
+        width: 280,
+        child: Padding(
+          padding: const EdgeInsets.only(right: 10),
+          child: _SkeletonCard(),
+        ),
       ),
     );
   }
@@ -970,31 +1202,60 @@ class _MapPageState extends State<MapPage> {
     );
   }
 
-  Widget _buildSearchAreaButton() {
-    return GestureDetector(
-      onTap: _searchThisArea,
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceColor,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 8),
-          ],
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.search_rounded, size: 15, color: AppTheme.primaryColor),
-            const SizedBox(width: 6),
-            Text('Cerca in questa zona',
-                style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.primaryColor)),
-          ],
-        ),
-      ),
+  // Indicatore sottile visibile solo durante il caricamento automatico.
+  // In stato MapLoading mostra uno spinner + label; altrimenti scompare
+  // senza occupare spazio (SizedBox.shrink).
+  Widget _buildAutoLoadIndicator(MapLoaded state) {
+    // Usiamo il BlocBuilder già presente nel parent: qui riceviamo MapLoaded,
+    // ma vogliamo mostrare l'indicatore anche durante MapLoading.
+    // Soluzione: avvolgiamo in un BlocBuilder locale leggero.
+    return BlocBuilder<MapBloc, MapState>(
+      buildWhen: (prev, curr) =>
+          (prev is MapLoading) != (curr is MapLoading),
+      builder: (context, mapState) {
+        final isLoading = mapState is MapLoading;
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 250),
+          child: isLoading
+              ? Container(
+                  key: const ValueKey('loading'),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceColor,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black.withOpacity(0.10),
+                          blurRadius: 8),
+                    ],
+                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppTheme.primaryColor,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Aggiornamento area...',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.primaryColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : const SizedBox.shrink(key: ValueKey('idle')),
+        );
+      },
     );
   }
 
@@ -1004,11 +1265,13 @@ class _MapPageState extends State<MapPage> {
           ...({'Diesel HVO': ['Diesel HVO', 'HVO']}[ft] ?? [ft]),
       ];
 
-  List<GasStation> _filterAndSortStations(List<GasStation> stations) {
+  List<GasStation> _filterAndSortStations(
+    List<GasStation> stations, {
+    UserLocation? userLocation,
+  }) {
     final effectiveTypes = _expandFuelTypes(_selectedFuelTypes);
 
-    // Ritaglia alle sole stazioni nel viewport corrente: filtri e ordinamento
-    // hanno senso solo sull'area che l'utente sta guardando
+    // ── Viewport filter ───────────────────────────────────────────────────
     List<GasStation> inView = stations;
     try {
       final bounds = _mapController.camera.visibleBounds;
@@ -1017,6 +1280,7 @@ class _MapPageState extends State<MapPage> {
           .toList();
     } catch (_) {}
 
+    // ── Fuel / brand filter ───────────────────────────────────────────────
     final filtered = inView.where((s) {
       final fuelMatch = s.prices.isEmpty ||
           effectiveTypes.any((ft) => s.prices.containsKey(ft));
@@ -1025,6 +1289,7 @@ class _MapPageState extends State<MapPage> {
       return fuelMatch && brandMatch;
     }).toList();
 
+    // ── Sort ──────────────────────────────────────────────────────────────
     switch (_sortBy) {
       case 'price':
         filtered.sort((a, b) {
@@ -1038,6 +1303,18 @@ class _MapPageState extends State<MapPage> {
             (a, b) => (b.averageRating ?? 0).compareTo(a.averageRating ?? 0));
         break;
       default:
+        // Ordinamento per distanza: pre-calcola UNA SOLA VOLTA per stazione
+        // invece di chiamare Haversine O(n log n) volte nel comparator.
+        if (userLocation != null) {
+          final ulat = userLocation.latitude;
+          final ulon = userLocation.longitude;
+          final distCache = <String, double>{
+            for (final s in filtered)
+              s.id: s.getDistanceFromCoordinates(ulat, ulon),
+          };
+          filtered.sort((a, b) =>
+              (distCache[a.id] ?? 0).compareTo(distCache[b.id] ?? 0));
+        }
         break;
     }
     return filtered;
@@ -1186,12 +1463,120 @@ class _MapPageState extends State<MapPage> {
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _panDebounce?.cancel();
     _searchDebounce?.cancel();
     _searchController.dispose();
     _mapController.dispose();
     _listScrollController.dispose();
     _mobileScrollController.dispose();
     super.dispose();
+  }
+}
+
+// ─── Skeleton card (loading placeholder) ──────────────────────────────────────
+// Mostra una card grigia animata mentre le stazioni vengono caricate,
+// eliminando il "salto" dal vuoto alla lista.
+
+class _SkeletonCard extends StatefulWidget {
+  const _SkeletonCard();
+
+  @override
+  State<_SkeletonCard> createState() => _SkeletonCardState();
+}
+
+class _SkeletonCardState extends State<_SkeletonCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _anim = Tween<double>(begin: 0.4, end: 0.9).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (ctx, _) {
+        final base = AppTheme.borderColor.withOpacity(_anim.value);
+        return Card(
+          elevation: 0,
+          color: AppTheme.surfaceColor,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: const BorderSide(color: AppTheme.borderColor),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Nome
+                Container(
+                  height: 14,
+                  width: 160,
+                  decoration: BoxDecoration(
+                    color: base,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                // Indirizzo
+                Container(
+                  height: 10,
+                  width: 200,
+                  decoration: BoxDecoration(
+                    color: base,
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                // Distanza
+                Container(
+                  height: 10,
+                  width: 80,
+                  decoration: BoxDecoration(
+                    color: base,
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                // Chip prezzi
+                Row(
+                  children: List.generate(
+                    3,
+                    (i) => Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      width: 60,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: base,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 

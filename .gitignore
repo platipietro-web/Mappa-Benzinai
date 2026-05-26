@@ -1,0 +1,89 @@
+# ── Flutter / Dart ────────────────────────────────────────────────────────────
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.buildlog/
+.history
+.svn/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# ── Firebase ──────────────────────────────────────────────────────────────────
+# IMPORTANTE: questi file contengono chiavi — NON committare mai
+google-services.json
+GoogleService-Info.plist
+# .firebaserc NON va ignorato: collega la cartella al progetto Firebase (non è un segreto)
+firebase-debug.log
+firebase-debug.*.log
+.firebase/
+
+# Emulatori Firebase
+*-debug.log
+ui-debug.log
+database-debug.log
+firestore-debug.log
+pubsub-debug.log
+storage-debug.log
+
+# ── Chiavi e certificati ──────────────────────────────────────────────────────
+*.keystore
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+key.properties
+**/android/key.properties
+
+# ── Node / Cloud Functions ────────────────────────────────────────────────────
+functions/node_modules/
+functions/.env
+functions/.env.local
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# ── Variabili d'ambiente ──────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.env
+
+# ── macOS ─────────────────────────────────────────────────────────────────────
+.DS_Store
+**/.DS_Store
+*.xcworkspace/xcuserdata/

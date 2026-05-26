@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:dio/dio.dart';
 import 'package:mappa_prezzi_benzina/core/errors/exceptions.dart';
 import 'package:mappa_prezzi_benzina/core/utils/logger.dart';
@@ -70,20 +72,37 @@ class FuelPriceApiImpl implements FuelPriceApi {
   ) async {
     try {
       final stations = await _loadAllStations();
-      final nearby = stations
-          .where((s) =>
-              s.getDistanceFromCoordinates(
-                location.latitude,
-                location.longitude,
-              ) <=
-              radiusKm)
-          .toList()
-        ..sort((a, b) => a
-            .getDistanceFromCoordinates(location.latitude, location.longitude)
-            .compareTo(b.getDistanceFromCoordinates(
-                location.latitude, location.longitude)));
 
-      logInfo('Found ${nearby.length} stations within ${radiusKm}km');
+      // ── Ottimizzazione: bounding-box rejection + distanza pre-calcolata ──
+      // 1. Scarta con semplici sottrazioni tutte le stazioni fuori dal rettangolo
+      //    attorno al centro (O(1) per stazione, no trig).
+      // 2. Sulle stazioni rimaste calcola Haversine UNA SOLA VOLTA e memorizza.
+      // 3. Usa la distanza memorizzata nel sort → 0 chiamate extra a Haversine.
+      final lat = location.latitude;
+      final lon = location.longitude;
+      final latDelta = radiusKm / 111.0 + 0.1;
+      final lonDelta =
+          radiusKm / (111.0 * math.cos(lat * math.pi / 180)) + 0.1;
+
+      final distances = <String, double>{};
+      final candidates = <GasStationModel>[];
+
+      for (final s in stations) {
+        if ((s.latitude - lat).abs() > latDelta) continue;
+        if ((s.longitude - lon).abs() > lonDelta) continue;
+        final d = s.getDistanceFromCoordinates(lat, lon);
+        if (d <= radiusKm) {
+          distances[s.id] = d;
+          candidates.add(s);
+        }
+      }
+
+      candidates.sort(
+          (a, b) => distances[a.id]!.compareTo(distances[b.id]!));
+
+      final nearby = candidates;
+      logInfo('Found ${nearby.length} stations within ${radiusKm}km'
+          ' (scanned ${stations.length}, bbox: ${candidates.length})');
 
       if (nearby.isEmpty) {
         logInfo('No MIMIT stations found, falling back to OpenStreetMap');
