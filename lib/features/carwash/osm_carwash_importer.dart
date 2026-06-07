@@ -108,16 +108,16 @@ out center tags;
 
     if (isAutomated && isSelfService) return 'both';
     if (isAutomated) return 'automatic';
-    // When OSM doesn't specify, assume both services are available
-    return 'both';
+    if (isSelfService) return 'self-only';
+    return 'unknown'; // OSM doesn't specify — don't assume
   }
 
-  bool _parseVacuum(Map<String, dynamic> tags) {
+  bool? _parseVacuum(Map<String, dynamic> tags) {
     if (tags.containsKey('vacuum_cleaner')) {
       return tags['vacuum_cleaner'] == 'yes' ||
           tags['vacuum_cleaner:fee'] == 'yes';
     }
-    return true; // assume available when unspecified
+    return null; // unspecified — don't assume
   }
 
   String _parsePayment(Map<String, dynamic> tags) {
@@ -127,7 +127,7 @@ out center tags;
         tags['payment:visa'] == 'yes' ||
         tags['payment:mastercard'] == 'yes';
     final hasKnownPayment = tags.keys.any((k) => k.startsWith('payment:'));
-    if (!hasKnownPayment) return 'both'; // assume both when unspecified
+    if (!hasKnownPayment) return 'unknown'; // unspecified — don't assume
     if (hasCoins && hasCard) return 'both';
     if (hasCard) return 'card';
     return 'coins';

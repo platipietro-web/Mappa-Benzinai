@@ -9,7 +9,7 @@ class CarWashModel extends CarWash {
     required super.latitude,
     required super.longitude,
     required super.type,
-    required super.hasVacuum,
+    super.hasVacuum,
     required super.paymentType,
     super.createdAt,
   });
@@ -21,9 +21,9 @@ class CarWashModel extends CarWash {
       address: json['address'] as String?,
       latitude: ((json['latitude'] as num?) ?? 0.0).toDouble(),
       longitude: ((json['longitude'] as num?) ?? 0.0).toDouble(),
-      type: (json['type'] as String?) ?? 'both',
-      hasVacuum: (json['has_vacuum'] as bool?) ?? true,
-      paymentType: (json['payment_type'] as String?) ?? 'both',
+      type: (json['type'] as String?) ?? 'unknown',
+      hasVacuum: json['has_vacuum'] as bool?,
+      paymentType: (json['payment_type'] as String?) ?? 'unknown',
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'] as String)
           : null,
@@ -32,7 +32,7 @@ class CarWashModel extends CarWash {
 
   factory CarWashModel.fromFirestore(Map<String, dynamic> json, String docId) {
     final location = json['location'] as Map<String, dynamic>?;
-    final rawType = (json['type'] as String?) ?? 'both';
+    final rawType = (json['type'] as String?) ?? 'unknown';
     // 'self-service' was the old default before the 'both' migration —
     // treat it as 'both' so existing records show automatic as available.
     final type = rawType == 'self-service' ? 'both' : rawType;
@@ -43,8 +43,8 @@ class CarWashModel extends CarWash {
       latitude: ((location?['latitude'] as num?) ?? 0.0).toDouble(),
       longitude: ((location?['longitude'] as num?) ?? 0.0).toDouble(),
       type: type,
-      hasVacuum: (json['has_vacuum'] as bool?) ?? true,
-      paymentType: (json['payment_type'] as String?) ?? 'both',
+      hasVacuum: json['has_vacuum'] as bool?,
+      paymentType: (json['payment_type'] as String?) ?? 'unknown',
       createdAt: json['created_at'] != null
           ? (json['created_at'] as Timestamp).toDate()
           : null,

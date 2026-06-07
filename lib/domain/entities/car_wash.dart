@@ -12,7 +12,7 @@ class CarWash extends Equatable {
   // 'self-only' = solo self-service (no rulli) — impostato esplicitamente
   // 'self-service' = legacy pre-migration, trattato come 'both' in lettura
   final String type;
-  final bool hasVacuum;
+  final bool? hasVacuum;
   final String paymentType; // 'coins' | 'card' | 'both'
   final DateTime? createdAt;
 
@@ -25,7 +25,7 @@ class CarWash extends Equatable {
     required this.latitude,
     required this.longitude,
     required this.type,
-    required this.hasVacuum,
+    this.hasVacuum,
     required this.paymentType,
     this.createdAt,
   });

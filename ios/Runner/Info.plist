@@ -4,10 +4,6 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Mappa Benzinai usa la tua posizione per mostrarti le stazioni di servizio e gli autolavaggi più vicini.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Mappa Benzinai usa la tua posizione per mostrarti le stazioni di servizio e gli autolavaggi più vicini.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -30,6 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Mappa Benzinai usa la tua posizione per mostrarti le stazioni di servizio e gli autolavaggi più vicini.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Mappa Benzinai usa la tua posizione per mostrarti le stazioni di servizio e gli autolavaggi più vicini.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -57,6 +57,8 @@
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
+	<key>UIStatusBarHidden</key>
+	<false/>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

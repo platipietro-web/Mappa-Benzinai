@@ -70,6 +70,10 @@ class _CarWashScreenState extends State<CarWashScreen> {
               radiusKm: AppConstants.stationSearchRadius,
               isGpsLocation: true,
             ));
+        _silentOsmImport(
+          LatLng(locationState.location.latitude, locationState.location.longitude),
+          AppConstants.stationSearchRadius,
+        );
       }
     } else if (locationState is! LocationLoading) {
       context.read<LocationBloc>().add(const RequestLocationPermissionEvent());
@@ -349,7 +353,7 @@ class _CarWashScreenState extends State<CarWashScreen> {
         case 'auto':
           return w.type != 'self-only';
         case 'vacuum':
-          return w.hasVacuum;
+          return w.hasVacuum == true;
         default:
           return true;
       }
@@ -1133,25 +1137,47 @@ class _CarWashScreenState extends State<CarWashScreen> {
                               ),
                     ),
                     const SizedBox(height: 10),
+                    if (wash.type == 'unknown' || wash.hasVacuum == null || wash.paymentType == 'unknown') ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFFDE68A)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFFD97706)),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Dati non verificati — le informazioni mostrate sono indicative. Aiutaci a tenerle aggiornate!',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 11,
+                                  color: const Color(0xFF92400E),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
                     _detailRow(
                       Icons.handyman_rounded,
-                      wash.type != 'automatic'
-                          ? 'Disponibile'
-                          : 'Non disponibile',
+                      wash.type != 'automatic' ? 'Disponibile' : 'Non disponibile',
                       'Self-service',
                     ),
                     const SizedBox(height: 10),
                     _detailRow(
                       Icons.settings_rounded,
-                      wash.type != 'self-only'
-                          ? 'Disponibile'
-                          : 'Non disponibile',
+                      wash.type != 'self-only' ? 'Disponibile' : 'Non disponibile',
                       'Automatico (rulli)',
                     ),
                     const SizedBox(height: 10),
                     _detailRow(
                       Icons.air,
-                      wash.hasVacuum ? 'Disponibile' : 'Non disponibile',
+                      wash.hasVacuum == false ? 'Non disponibile' : 'Disponibile',
                       'Aspirapolvere',
                     ),
                     const SizedBox(height: 10),
@@ -1163,14 +1189,27 @@ class _CarWashScreenState extends State<CarWashScreen> {
                     const SizedBox(height: 24),
                     SizedBox(
                       width: double.infinity,
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.edit_outlined),
-                        label: const Text('Segnala aggiornamento'),
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _showReportForm(wash);
-                        },
-                      ),
+                      child: (wash.type == 'unknown' || wash.hasVacuum == null || wash.paymentType == 'unknown')
+                          ? ElevatedButton.icon(
+                              icon: const Icon(Icons.edit_outlined),
+                              label: const Text('Verifica e segnala aggiornamento'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFD97706),
+                                foregroundColor: Colors.white,
+                              ),
+                              onPressed: () {
+                                Navigator.pop(context);
+                                _showReportForm(wash);
+                              },
+                            )
+                          : OutlinedButton.icon(
+                              icon: const Icon(Icons.edit_outlined),
+                              label: const Text('Segnala aggiornamento'),
+                              onPressed: () {
+                                Navigator.pop(context);
+                                _showReportForm(wash);
+                              },
+                            ),
                     ),
                     SizedBox(
                         height: MediaQuery.of(context).padding.bottom),
@@ -1185,10 +1224,14 @@ class _CarWashScreenState extends State<CarWashScreen> {
   }
 
   Widget _detailRow(IconData icon, String value, String label,
-      {VoidCallback? onTap}) {
+      {VoidCallback? onTap, bool isUnknown = false}) {
     final content = Row(
       children: [
-        Icon(icon, size: 18, color: AppTheme.textSecondaryColor),
+        Icon(icon,
+            size: 18,
+            color: isUnknown
+                ? AppTheme.textSecondaryColor.withOpacity(0.4)
+                : AppTheme.textSecondaryColor),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -1202,9 +1245,12 @@ class _CarWashScreenState extends State<CarWashScreen> {
                   style: GoogleFonts.poppins(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
-                    color: onTap != null
-                        ? AppTheme.primaryColor
-                        : AppTheme.textPrimaryColor,
+                    color: isUnknown
+                        ? AppTheme.textSecondaryColor.withOpacity(0.5)
+                        : onTap != null
+                            ? AppTheme.primaryColor
+                            : AppTheme.textPrimaryColor,
+                    fontStyle: isUnknown ? FontStyle.italic : FontStyle.normal,
                   )),
             ],
           ),
@@ -1227,10 +1273,10 @@ class _CarWashScreenState extends State<CarWashScreen> {
   }
 
   void _showReportForm(CarWash wash) {
-    bool hasSelfService = wash.type != 'automatic';
-    bool hasAutomatic = wash.type != 'self-only';
-    bool hasVacuum = wash.hasVacuum;
-    String paymentType = wash.paymentType;
+    bool hasSelfService = wash.type == 'unknown' ? true : wash.type != 'automatic';
+    bool hasAutomatic = wash.type == 'unknown' ? true : wash.type != 'self-only';
+    bool hasVacuum = wash.hasVacuum ?? true;
+    String paymentType = wash.paymentType == 'unknown' ? 'both' : wash.paymentType;
 
     showModalBottomSheet(
       context: context,
@@ -1368,6 +1414,8 @@ class _CarWashScreenState extends State<CarWashScreen> {
         return 'Carta';
       case 'both':
         return 'Monete e carta';
+      case 'unknown':
+        return 'Monete e carta';
       default:
         return 'Monete';
     }
@@ -1407,8 +1455,10 @@ class _CarWashCard extends StatelessWidget {
     final isLoggedIn = authState is Authenticated && !authState.isAnonymous;
     final isFav = favState.isFavorite(wash.id);
 
-    final hasSelf = wash.type != 'automatic';
-    final hasAuto = wash.type != 'self-only';
+    final isUnknownType = wash.type == 'unknown';
+    final hasSelf = isUnknownType || wash.type != 'automatic';
+    final hasAuto = isUnknownType || wash.type != 'self-only';
+    final isAnyUnknown = isUnknownType || wash.hasVacuum == null || wash.paymentType == 'unknown';
 
     return GestureDetector(
       onTap: onTap,
@@ -1517,11 +1567,15 @@ class _CarWashCard extends StatelessWidget {
                     _badge('Self-service', Icons.handyman_rounded, _kCarWashColor),
                   if (hasAuto)
                     _badge('Rulli', Icons.settings_rounded, const Color(0xFF0E7490)),
-                  if (wash.hasVacuum)
+                  if (wash.hasVacuum != false)
                     _badge('Aspirapolvere', Icons.air, const Color(0xFF6B7280)),
                   _paymentBadge(wash.paymentType),
                 ],
               ),
+              if (isAnyUnknown) ...[
+                const SizedBox(height: 8),
+                _unverifiedChip(),
+              ],
             ],
           ),
         ),
@@ -1550,12 +1604,38 @@ class _CarWashCard extends StatelessWidget {
     );
   }
 
+  Widget _unverifiedChip() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF3C7),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFFFDE68A)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.help_outline_rounded, size: 11, color: Color(0xFFD97706)),
+          const SizedBox(width: 4),
+          Text(
+            'Dati non verificati',
+            style: GoogleFonts.poppins(
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+              color: const Color(0xFF92400E),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _paymentBadge(String paymentType) {
     final label = paymentType == 'card'
         ? 'Carta'
-        : paymentType == 'both'
-            ? 'Monete/Carta'
-            : 'Monete';
+        : paymentType == 'coins'
+            ? 'Monete'
+            : 'Monete/Carta';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
