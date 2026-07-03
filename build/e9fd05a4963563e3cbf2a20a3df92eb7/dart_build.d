@@ -1,1 +1,0 @@
- /Users/pietro/Desktop/App\ test/Mappa-Benzinai/build/e9fd05a4963563e3cbf2a20a3df92eb7/dart_build_result.json:  /Users/pietro/Desktop/App\ test/Mappa-Benzinai/.dart_tool/package_config.json /Users/pietro/Desktop/App\ test/Mappa-Benzinai/pubspec.yaml /Users/pietro/flutter/bin/cache/dart-sdk/version

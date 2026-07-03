@@ -29,7 +29,7 @@ void main() async {
   setupServiceLocator();
 
   // Le tile OSM annullate per cambio viewport generano ClientException con
-  // "abortTrigger": è comportamento normale, non un errore reale.
+  // "abortTrigger": è comportamento normale, non un errore reale....
   FlutterError.onError = (FlutterErrorDetails details) {
     final msg = details.exception.toString();
     if (msg.contains('abortTrigger') || msg.contains('XMLHttpRequest error')) {
