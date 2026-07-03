@@ -275,8 +275,8 @@ class _MapPageState extends State<MapPage> {
                   final loaded = state as MapLoaded;
 
                   // ── Preferiti: seleziona + camera move ──────────────────
-                  final station =
-                      loaded.pendingHighlightStation ?? _pendingHighlightStation;
+                  final station = loaded.pendingHighlightStation ??
+                      _pendingHighlightStation;
                   if (station != null) {
                     setState(() => _pendingHighlightStation = null);
                     context
@@ -298,7 +298,8 @@ class _MapPageState extends State<MapPage> {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     _scrollToStationInList(
                       stationId,
-                      _filterAndSortStations(loaded.stations, userLocation: loaded.userLocation),
+                      _filterAndSortStations(loaded.stations,
+                          userLocation: loaded.userLocation),
                     );
                   });
                 },
@@ -370,7 +371,6 @@ class _MapPageState extends State<MapPage> {
                 height: 36,
                 fit: BoxFit.contain,
               ),
-
             ),
             const SizedBox(height: 20),
             Text(AppConstants.appName,
@@ -419,7 +419,8 @@ class _MapPageState extends State<MapPage> {
   // ─── DESKTOP layout ────────────────────────────────────────────────────────
 
   Widget _buildDesktopLayout(MapLoaded state) {
-    final stations = _filterAndSortStations(state.stations, userLocation: state.userLocation);
+    final stations = _filterAndSortStations(state.stations,
+        userLocation: state.userLocation);
 
     return Column(
       children: [
@@ -528,45 +529,52 @@ class _MapPageState extends State<MapPage> {
   // ─── MOBILE layout ─────────────────────────────────────────────────────────
 
   Widget _buildMobileLayout(MapLoaded state) {
-    final stations = _filterAndSortStations(state.stations, userLocation: state.userLocation);
+    final stations = _filterAndSortStations(state.stations,
+        userLocation: state.userLocation);
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final bottomSheetHeight = 280.0 + bottomInset;
 
-    return Column(
-      children: [
-        _buildAppBar(state),
-        Expanded(
-          child: Stack(
-            children: [
-              Positioned.fill(
-                bottom: 260,
-                child: _buildMap(state, stations),
-              ),
+    return SafeArea(
+      top: true,
+      bottom: false,
+      child: Column(
+        children: [
+          _buildAppBar(state),
+          Expanded(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  bottom: bottomSheetHeight,
+                  child: _buildMap(state, stations),
+                ),
 
-              // ── Indicatore auto-load (top center) ────────────────────────
-              Positioned(
-                top: 12,
-                left: 0,
-                right: 0,
-                child: Center(child: _buildAutoLoadIndicator(state)),
-              ),
+                // ── Indicatore auto-load (top center) ────────────────────────
+                Positioned(
+                  top: 12,
+                  left: 0,
+                  right: 0,
+                  child: Center(child: _buildAutoLoadIndicator(state)),
+                ),
 
-              // ── FAB controlli mappa (destra) ──────────────────────────────
-              Positioned(
-                right: 12,
-                bottom: 276,
-                child: _buildMapControls(state),
-              ),
+                // ── FAB controlli mappa (destra) ──────────────────────────────
+                Positioned(
+                  right: 12,
+                  bottom: bottomSheetHeight + 16,
+                  child: _buildMapControls(state),
+                ),
 
-              // ── Bottom sheet stazioni ─────────────────────────────────────
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: _buildMobileBottomList(state, stations),
-              ),
-            ],
+                // ── Bottom sheet stazioni ─────────────────────────────────────
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: _buildMobileBottomList(state, stations, bottomInset),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -1017,9 +1025,11 @@ class _MapPageState extends State<MapPage> {
 
   // ─── Mobile bottom list ────────────────────────────────────────────────────
 
-  Widget _buildMobileBottomList(MapLoaded state, List<GasStation> stations) {
+  Widget _buildMobileBottomList(
+      MapLoaded state, List<GasStation> stations, double bottomInset) {
     return Container(
-      height: 260,
+      height: 280 + bottomInset,
+      padding: EdgeInsets.only(bottom: bottomInset),
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -1051,8 +1061,7 @@ class _MapPageState extends State<MapPage> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: BlocBuilder<MapBloc, MapState>(
-              buildWhen: (p, c) =>
-                  (p is MapLoading) != (c is MapLoading),
+              buildWhen: (p, c) => (p is MapLoading) != (c is MapLoading),
               builder: (ctx, mapState) {
                 final loading = mapState is MapLoading;
                 return Row(
@@ -1093,8 +1102,7 @@ class _MapPageState extends State<MapPage> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(Icons.local_gas_station,
-                                    size: 12,
-                                    color: AppTheme.primaryColor),
+                                    size: 12, color: AppTheme.primaryColor),
                                 const SizedBox(width: 5),
                                 Text(
                                   '${stations.length} distributori',
@@ -1112,8 +1120,7 @@ class _MapPageState extends State<MapPage> {
                       'Scorri per vedere altri →',
                       style: GoogleFonts.poppins(
                         fontSize: 10,
-                        color: AppTheme.textSecondaryColor
-                            .withOpacity(0.6),
+                        color: AppTheme.textSecondaryColor.withOpacity(0.6),
                       ),
                     ),
                   ],
@@ -1125,8 +1132,7 @@ class _MapPageState extends State<MapPage> {
           // ── Lista card orizzontale ─────────────────────────────────────
           Expanded(
             child: BlocBuilder<MapBloc, MapState>(
-              buildWhen: (p, c) =>
-                  (p is MapLoading) != (c is MapLoading),
+              buildWhen: (p, c) => (p is MapLoading) != (c is MapLoading),
               builder: (ctx, mapState) {
                 final loading = mapState is MapLoading && stations.isEmpty;
                 if (loading) {
@@ -1138,12 +1144,11 @@ class _MapPageState extends State<MapPage> {
                 return ListView.builder(
                   controller: _mobileScrollController,
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+                  padding: EdgeInsets.fromLTRB(12, 4, 12, 14 + bottomInset),
                   itemCount: stations.length,
                   itemBuilder: (context, index) {
                     final station = stations[index];
-                    final isSelected =
-                        state.selectedStation?.id == station.id;
+                    final isSelected = state.selectedStation?.id == station.id;
                     return SizedBox(
                       width: 280,
                       child: Padding(
@@ -1152,8 +1157,7 @@ class _MapPageState extends State<MapPage> {
                           station: station,
                           userLocation: state.userLocation,
                           isSelected: isSelected,
-                          onTap: () =>
-                              _onCardTap(context, station, state),
+                          onTap: () => _onCardTap(context, station, state),
                         ),
                       ),
                     );
@@ -1210,8 +1214,7 @@ class _MapPageState extends State<MapPage> {
     // ma vogliamo mostrare l'indicatore anche durante MapLoading.
     // Soluzione: avvolgiamo in un BlocBuilder locale leggero.
     return BlocBuilder<MapBloc, MapState>(
-      buildWhen: (prev, curr) =>
-          (prev is MapLoading) != (curr is MapLoading),
+      buildWhen: (prev, curr) => (prev is MapLoading) != (curr is MapLoading),
       builder: (context, mapState) {
         final isLoading = mapState is MapLoading;
         return AnimatedSwitcher(
@@ -1224,8 +1227,7 @@ class _MapPageState extends State<MapPage> {
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                          color: Colors.black.withOpacity(0.10),
-                          blurRadius: 8),
+                          color: Colors.black.withOpacity(0.10), blurRadius: 8),
                     ],
                   ),
                   padding:
@@ -1262,7 +1264,10 @@ class _MapPageState extends State<MapPage> {
   // 'Diesel HVO' nel filtro copre anche stazioni con prezzo 'HVO' puro
   static List<String> _expandFuelTypes(List<String> selected) => [
         for (final ft in selected)
-          ...({'Diesel HVO': ['Diesel HVO', 'HVO']}[ft] ?? [ft]),
+          ...({
+                'Diesel HVO': ['Diesel HVO', 'HVO']
+              }[ft] ??
+              [ft]),
       ];
 
   List<GasStation> _filterAndSortStations(
@@ -1312,8 +1317,8 @@ class _MapPageState extends State<MapPage> {
             for (final s in filtered)
               s.id: s.getDistanceFromCoordinates(ulat, ulon),
           };
-          filtered.sort((a, b) =>
-              (distCache[a.id] ?? 0).compareTo(distCache[b.id] ?? 0));
+          filtered.sort(
+              (a, b) => (distCache[a.id] ?? 0).compareTo(distCache[b.id] ?? 0));
         }
         break;
     }
@@ -1357,8 +1362,7 @@ class _MapPageState extends State<MapPage> {
   /// BlocBuilder abbia già ricostruito la lista col nuovo stato.
   void _scrollToStationInList(
       String stationId, List<GasStation> visibleStations) {
-    final isDesktop =
-        MediaQuery.of(context).size.width >= _kDesktopBreakpoint;
+    final isDesktop = MediaQuery.of(context).size.width >= _kDesktopBreakpoint;
 
     if (isDesktop) {
       final key = _stationKeys[stationId];

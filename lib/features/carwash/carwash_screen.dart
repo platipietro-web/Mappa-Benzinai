@@ -71,7 +71,8 @@ class _CarWashScreenState extends State<CarWashScreen> {
               isGpsLocation: true,
             ));
         _silentOsmImport(
-          LatLng(locationState.location.latitude, locationState.location.longitude),
+          LatLng(locationState.location.latitude,
+              locationState.location.longitude),
           AppConstants.stationSearchRadius,
         );
       }
@@ -118,7 +119,11 @@ class _CarWashScreenState extends State<CarWashScreen> {
     setState(() => _searchLoading = true);
     _searchDebounce = Timer(const Duration(milliseconds: 400), () async {
       final results = await GeocodingService.search(query);
-      if (mounted) setState(() { _searchResults = results; _searchLoading = false; });
+      if (mounted)
+        setState(() {
+          _searchResults = results;
+          _searchLoading = false;
+        });
     });
   }
 
@@ -126,18 +131,19 @@ class _CarWashScreenState extends State<CarWashScreen> {
     _deactivateSearch();
     final target = LatLng(result.lat, result.lon);
     _lastLoadedCenter = target;
-    try { _mapController.move(target, 13.0); } catch (_) {}
+    try {
+      _mapController.move(target, 13.0);
+    } catch (_) {}
     final loc = UserLocation(
       latitude: result.lat,
       longitude: result.lon,
       timestamp: DateTime.now(),
     );
     context.read<CarWashBloc>().add(
-      LoadNearbyCarWashesEvent(location: loc, radiusKm: 15.0),
-    );
+          LoadNearbyCarWashesEvent(location: loc, radiusKm: 15.0),
+        );
     _silentOsmImport(target, 15.0);
   }
-
 
   Future<void> _silentOsmImport(LatLng center, double radiusKm) async {
     if (_isImporting) return;
@@ -202,8 +208,7 @@ class _CarWashScreenState extends State<CarWashScreen> {
     }
   }
 
-  Future<void> _confirmOpenMaps(
-      double lat, double lon, String address) async {
+  Future<void> _confirmOpenMaps(double lat, double lon, String address) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -239,9 +244,14 @@ class _CarWashScreenState extends State<CarWashScreen> {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final addr = data['address'] as Map<String, dynamic>?;
       if (addr == null) return null;
-      final road = (addr['road'] ?? addr['pedestrian'] ?? addr['footway'] ?? '') as String;
+      final road = (addr['road'] ?? addr['pedestrian'] ?? addr['footway'] ?? '')
+          as String;
       final number = (addr['house_number'] ?? '') as String;
-      final city = (addr['city'] ?? addr['town'] ?? addr['village'] ?? addr['municipality'] ?? '') as String;
+      final city = (addr['city'] ??
+          addr['town'] ??
+          addr['village'] ??
+          addr['municipality'] ??
+          '') as String;
       final line1 = [road, number].where((s) => s.isNotEmpty).join(' ');
       return [line1, city].where((s) => s.isNotEmpty).join(', ');
     } catch (_) {
@@ -332,8 +342,10 @@ class _CarWashScreenState extends State<CarWashScreen> {
                   loaded = const CarWashLoaded(washes: []);
                 }
 
-                final isDesktop = MediaQuery.of(context).size.width >= _kDesktopBreakpoint;
-                final filteredWashes = _applyFiltersAndSort(loaded.washes, loaded.userLocation);
+                final isDesktop =
+                    MediaQuery.of(context).size.width >= _kDesktopBreakpoint;
+                final filteredWashes =
+                    _applyFiltersAndSort(loaded.washes, loaded.userLocation);
                 return isDesktop
                     ? _buildDesktopLayout(loaded, filteredWashes)
                     : _buildMobileLayout(loaded, filteredWashes);
@@ -345,7 +357,8 @@ class _CarWashScreenState extends State<CarWashScreen> {
     );
   }
 
-  List<CarWash> _applyFiltersAndSort(List<CarWash> washes, UserLocation? userLocation) {
+  List<CarWash> _applyFiltersAndSort(
+      List<CarWash> washes, UserLocation? userLocation) {
     var result = washes.where((w) {
       switch (_filterType) {
         case 'self':
@@ -360,7 +373,8 @@ class _CarWashScreenState extends State<CarWashScreen> {
     }).toList();
     if (userLocation != null) {
       result.sort((a, b) => a
-          .getDistanceFromCoordinates(userLocation.latitude, userLocation.longitude)
+          .getDistanceFromCoordinates(
+              userLocation.latitude, userLocation.longitude)
           .compareTo(b.getDistanceFromCoordinates(
               userLocation.latitude, userLocation.longitude)));
     }
@@ -380,14 +394,16 @@ class _CarWashScreenState extends State<CarWashScreen> {
                 width: 380,
                 decoration: const BoxDecoration(
                   color: AppTheme.surfaceColor,
-                  border: Border(right: BorderSide(color: AppTheme.borderColor)),
+                  border:
+                      Border(right: BorderSide(color: AppTheme.borderColor)),
                 ),
                 child: Column(
                   children: [
                     Container(
                       padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
                       decoration: const BoxDecoration(
-                        border: Border(bottom: BorderSide(color: AppTheme.borderColor)),
+                        border: Border(
+                            bottom: BorderSide(color: AppTheme.borderColor)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -438,13 +454,14 @@ class _CarWashScreenState extends State<CarWashScreen> {
                                     userLocation: state.userLocation,
                                     isSelected: isSelected,
                                     onTap: () => _onMarkerTap(wash),
-                                    onAddressTap: (wash.address?.isNotEmpty ?? false)
-                                        ? () => _confirmOpenMaps(
-                                              wash.latitude,
-                                              wash.longitude,
-                                              wash.address ?? '',
-                                            )
-                                        : null,
+                                    onAddressTap:
+                                        (wash.address?.isNotEmpty ?? false)
+                                            ? () => _confirmOpenMaps(
+                                                  wash.latitude,
+                                                  wash.longitude,
+                                                  wash.address ?? '',
+                                                )
+                                            : null,
                                   ),
                                 );
                               },
@@ -484,44 +501,53 @@ class _CarWashScreenState extends State<CarWashScreen> {
   // ─── Mobile layout ─────────────────────────────────────────────────────────
 
   Widget _buildMobileLayout(CarWashLoaded state, List<CarWash> washes) {
-    return Column(
-      children: [
-        _buildAppBar(state),
-        Expanded(
-          child: Stack(
-            children: [
-              Positioned.fill(
-                bottom: 260,
-                child: CarWashMap(
-                  mapController: _mapController,
-                  washes: state.washes,
-                  selectedWash: state.selectedWash,
-                  userLocation: state.userLocation,
-                  onMarkerTap: _onMarkerTap,
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final bottomSheetHeight = 280.0 + bottomInset;
+
+    return SafeArea(
+      top: true,
+      bottom: false,
+      child: Column(
+        children: [
+          _buildAppBar(state),
+          Expanded(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  bottom: bottomSheetHeight,
+                  child: CarWashMap(
+                    mapController: _mapController,
+                    washes: state.washes,
+                    selectedWash: state.selectedWash,
+                    userLocation: state.userLocation,
+                    onMarkerTap: _onMarkerTap,
+                  ),
                 ),
-              ),
-              Positioned(
-                top: 12,
-                left: 0,
-                right: 0,
-                child: Center(child: _buildSearchAreaButton()),
-              ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: _buildMobileBottomPanel(state, washes),
-              ),
-            ],
+                Positioned(
+                  top: 12,
+                  left: 0,
+                  right: 0,
+                  child: Center(child: _buildSearchAreaButton()),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: _buildMobileBottomPanel(state, washes, bottomInset),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _buildMobileBottomPanel(CarWashLoaded state, List<CarWash> washes) {
+  Widget _buildMobileBottomPanel(
+      CarWashLoaded state, List<CarWash> washes, double bottomInset) {
     return Container(
-      height: 260,
+      height: 280 + bottomInset,
+      padding: EdgeInsets.only(bottom: bottomInset),
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
@@ -586,7 +612,7 @@ class _CarWashScreenState extends State<CarWashScreen> {
                 : ListView.builder(
                     controller: _mobileScrollController,
                     scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+                    padding: EdgeInsets.fromLTRB(12, 4, 12, 14 + bottomInset),
                     itemCount: washes.length,
                     itemBuilder: (context, i) {
                       final wash = washes[i];
@@ -734,12 +760,15 @@ class _CarWashScreenState extends State<CarWashScreen> {
                     ),
                   ),
                 _iconBtn(Icons.refresh_rounded, 'Aggiorna', () {
-                  context.read<CarWashBloc>().add(const RefreshCarWashesEvent());
+                  context
+                      .read<CarWashBloc>()
+                      .add(const RefreshCarWashesEvent());
                 }),
                 if (state.userLocation != null)
                   _iconBtn(Icons.my_location_rounded, 'La mia posizione', () {
                     final loc = state.userLocation!;
-                    _mapController.move(LatLng(loc.latitude, loc.longitude), 14);
+                    _mapController.move(
+                        LatLng(loc.latitude, loc.longitude), 14);
                   }),
                 const SizedBox(width: 4),
                 Tooltip(
@@ -775,7 +804,8 @@ class _CarWashScreenState extends State<CarWashScreen> {
             autofocus: true,
             onChanged: _onSearchChanged,
             onSubmitted: (_) {
-              if (_searchResults.isNotEmpty) _onResultSelected(_searchResults.first);
+              if (_searchResults.isNotEmpty)
+                _onResultSelected(_searchResults.first);
             },
             decoration: InputDecoration(
               hintText: 'Cerca una zona...',
@@ -895,12 +925,10 @@ class _CarWashScreenState extends State<CarWashScreen> {
           color: AppTheme.surfaceColor,
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.12), blurRadius: 8),
+            BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 8),
           ],
         ),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -994,8 +1022,7 @@ class _CarWashScreenState extends State<CarWashScreen> {
         child: SizedBox(
           width: 36,
           height: 36,
-          child:
-              Icon(icon, size: 20, color: AppTheme.textSecondaryColor),
+          child: Icon(icon, size: 20, color: AppTheme.textSecondaryColor),
         ),
       ),
     );
@@ -1004,8 +1031,9 @@ class _CarWashScreenState extends State<CarWashScreen> {
   // ─── Bottom sheets ─────────────────────────────────────────────────────────
 
   void _showWashDetails(CarWash wash) {
-    String? resolvedAddress =
-        (wash.address != null && wash.address!.isNotEmpty) ? wash.address : null;
+    String? resolvedAddress = (wash.address != null && wash.address!.isNotEmpty)
+        ? wash.address
+        : null;
     bool isGeocoding = false;
 
     showModalBottomSheet(
@@ -1055,8 +1083,7 @@ class _CarWashScreenState extends State<CarWashScreen> {
               return Container(
                 decoration: const BoxDecoration(
                   color: AppTheme.surfaceColor,
-                  borderRadius:
-                      BorderRadius.vertical(top: Radius.circular(20)),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                 ),
                 padding: const EdgeInsets.all(24),
                 child: Column(
@@ -1137,9 +1164,12 @@ class _CarWashScreenState extends State<CarWashScreen> {
                               ),
                     ),
                     const SizedBox(height: 10),
-                    if (wash.type == 'unknown' || wash.hasVacuum == null || wash.paymentType == 'unknown') ...[
+                    if (wash.type == 'unknown' ||
+                        wash.hasVacuum == null ||
+                        wash.paymentType == 'unknown') ...[
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFEF3C7),
                           borderRadius: BorderRadius.circular(10),
@@ -1147,7 +1177,8 @@ class _CarWashScreenState extends State<CarWashScreen> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFFD97706)),
+                            const Icon(Icons.info_outline_rounded,
+                                size: 16, color: Color(0xFFD97706)),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
@@ -1165,19 +1196,25 @@ class _CarWashScreenState extends State<CarWashScreen> {
                     ],
                     _detailRow(
                       Icons.handyman_rounded,
-                      wash.type != 'automatic' ? 'Disponibile' : 'Non disponibile',
+                      wash.type != 'automatic'
+                          ? 'Disponibile'
+                          : 'Non disponibile',
                       'Self-service',
                     ),
                     const SizedBox(height: 10),
                     _detailRow(
                       Icons.settings_rounded,
-                      wash.type != 'self-only' ? 'Disponibile' : 'Non disponibile',
+                      wash.type != 'self-only'
+                          ? 'Disponibile'
+                          : 'Non disponibile',
                       'Automatico (rulli)',
                     ),
                     const SizedBox(height: 10),
                     _detailRow(
                       Icons.air,
-                      wash.hasVacuum == false ? 'Non disponibile' : 'Disponibile',
+                      wash.hasVacuum == false
+                          ? 'Non disponibile'
+                          : 'Disponibile',
                       'Aspirapolvere',
                     ),
                     const SizedBox(height: 10),
@@ -1189,10 +1226,13 @@ class _CarWashScreenState extends State<CarWashScreen> {
                     const SizedBox(height: 24),
                     SizedBox(
                       width: double.infinity,
-                      child: (wash.type == 'unknown' || wash.hasVacuum == null || wash.paymentType == 'unknown')
+                      child: (wash.type == 'unknown' ||
+                              wash.hasVacuum == null ||
+                              wash.paymentType == 'unknown')
                           ? ElevatedButton.icon(
                               icon: const Icon(Icons.edit_outlined),
-                              label: const Text('Verifica e segnala aggiornamento'),
+                              label: const Text(
+                                  'Verifica e segnala aggiornamento'),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFFD97706),
                                 foregroundColor: Colors.white,
@@ -1211,8 +1251,7 @@ class _CarWashScreenState extends State<CarWashScreen> {
                               },
                             ),
                     ),
-                    SizedBox(
-                        height: MediaQuery.of(context).padding.bottom),
+                    SizedBox(height: MediaQuery.of(context).padding.bottom),
                   ],
                 ),
               );
@@ -1273,10 +1312,13 @@ class _CarWashScreenState extends State<CarWashScreen> {
   }
 
   void _showReportForm(CarWash wash) {
-    bool hasSelfService = wash.type == 'unknown' ? true : wash.type != 'automatic';
-    bool hasAutomatic = wash.type == 'unknown' ? true : wash.type != 'self-only';
+    bool hasSelfService =
+        wash.type == 'unknown' ? true : wash.type != 'automatic';
+    bool hasAutomatic =
+        wash.type == 'unknown' ? true : wash.type != 'self-only';
     bool hasVacuum = wash.hasVacuum ?? true;
-    String paymentType = wash.paymentType == 'unknown' ? 'both' : wash.paymentType;
+    String paymentType =
+        wash.paymentType == 'unknown' ? 'both' : wash.paymentType;
 
     showModalBottomSheet(
       context: context,
@@ -1358,9 +1400,11 @@ class _CarWashScreenState extends State<CarWashScreen> {
                 items: const [
                   DropdownMenuItem(value: 'coins', child: Text('Monete')),
                   DropdownMenuItem(value: 'card', child: Text('Carta')),
-                  DropdownMenuItem(value: 'both', child: Text('Monete e carta')),
+                  DropdownMenuItem(
+                      value: 'both', child: Text('Monete e carta')),
                 ],
-                onChanged: (v) => setSheetState(() => paymentType = v ?? paymentType),
+                onChanged: (v) =>
+                    setSheetState(() => paymentType = v ?? paymentType),
               ),
               const SizedBox(height: 20),
               SizedBox(
@@ -1385,7 +1429,9 @@ class _CarWashScreenState extends State<CarWashScreen> {
                       paymentType: paymentType,
                       createdAt: wash.createdAt,
                     );
-                    context.read<CarWashBloc>().add(UpdateCarWashEvent(updated));
+                    context
+                        .read<CarWashBloc>()
+                        .add(UpdateCarWashEvent(updated));
                     Navigator.pop(sheetCtx);
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -1458,7 +1504,9 @@ class _CarWashCard extends StatelessWidget {
     final isUnknownType = wash.type == 'unknown';
     final hasSelf = isUnknownType || wash.type != 'automatic';
     final hasAuto = isUnknownType || wash.type != 'self-only';
-    final isAnyUnknown = isUnknownType || wash.hasVacuum == null || wash.paymentType == 'unknown';
+    final isAnyUnknown = isUnknownType ||
+        wash.hasVacuum == null ||
+        wash.paymentType == 'unknown';
 
     return GestureDetector(
       onTap: onTap,
@@ -1564,9 +1612,11 @@ class _CarWashCard extends StatelessWidget {
                 runSpacing: 4,
                 children: [
                   if (hasSelf)
-                    _badge('Self-service', Icons.handyman_rounded, _kCarWashColor),
+                    _badge(
+                        'Self-service', Icons.handyman_rounded, _kCarWashColor),
                   if (hasAuto)
-                    _badge('Rulli', Icons.settings_rounded, const Color(0xFF0E7490)),
+                    _badge('Rulli', Icons.settings_rounded,
+                        const Color(0xFF0E7490)),
                   if (wash.hasVacuum != false)
                     _badge('Aspirapolvere', Icons.air, const Color(0xFF6B7280)),
                   _paymentBadge(wash.paymentType),
@@ -1615,7 +1665,8 @@ class _CarWashCard extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.help_outline_rounded, size: 11, color: Color(0xFFD97706)),
+          const Icon(Icons.help_outline_rounded,
+              size: 11, color: Color(0xFFD97706)),
           const SizedBox(width: 4),
           Text(
             'Dati non verificati',
@@ -1645,7 +1696,8 @@ class _CarWashCard extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.payment_rounded, size: 11, color: AppTheme.textSecondaryColor),
+          Icon(Icons.payment_rounded,
+              size: 11, color: AppTheme.textSecondaryColor),
           const SizedBox(width: 3),
           Text(label,
               style: GoogleFonts.poppins(

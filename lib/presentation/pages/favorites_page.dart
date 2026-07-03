@@ -65,8 +65,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
       BuildContext context, GasStation station, UserLocation? userLoc) {
     setState(() => _selectedStation = station);
     try {
-      _mapController.move(
-          LatLng(station.latitude, station.longitude), 15.0);
+      _mapController.move(LatLng(station.latitude, station.longitude), 15.0);
     } catch (_) {}
     Navigator.pushNamed(
       context,
@@ -76,8 +75,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
   }
 
   void _scrollToStation(String stationId, List<GasStation> stations) {
-    final isDesktop =
-        MediaQuery.of(context).size.width >= _kDesktopBreakpoint;
+    final isDesktop = MediaQuery.of(context).size.width >= _kDesktopBreakpoint;
     if (isDesktop) {
       final key = _stationKeys[stationId];
       if (key?.currentContext != null) {
@@ -94,8 +92,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
       if (index < 0) return;
       const cardWidth = 290.0;
       const leadingPadding = 12.0;
-      final target =
-          (leadingPadding + index * cardWidth).clamp(
+      final target = (leadingPadding + index * cardWidth).clamp(
         0.0,
         _mobileScrollController.position.maxScrollExtent,
       );
@@ -110,37 +107,36 @@ class _FavoritesPageState extends State<FavoritesPage> {
   @override
   Widget build(BuildContext context) {
     final authState = context.watch<AuthBloc>().state;
-    final isLoggedIn =
-        authState is Authenticated && !authState.isAnonymous;
+    final isLoggedIn = authState is Authenticated && !authState.isAnonymous;
 
     if (!isLoggedIn) return const _GuestFavoritesView();
 
     final locState = context.watch<LocationBloc>().state;
-    final userLocation =
-        locState is LocationLoaded ? locState.location : null;
+    final userLocation = locState is LocationLoaded ? locState.location : null;
 
     return BlocBuilder<FavoritesBloc, FavoritesState>(
       builder: (context, favState) {
-        final stations =
-            favState.stations.map(_toStation).toList();
+        final stations = favState.stations.map(_toStation).toList();
         final isDesktop =
             MediaQuery.of(context).size.width >= _kDesktopBreakpoint;
 
         return Scaffold(
           backgroundColor: AppTheme.backgroundColor,
-          body: Column(
-            children: [
-              _buildAppBar(stations),
-              Expanded(
-                child: favState.isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : isDesktop
-                        ? _buildDesktopLayout(
-                            context, stations, userLocation)
-                        : _buildMobileLayout(
-                            context, stations, userLocation),
-              ),
-            ],
+          body: SafeArea(
+            top: true,
+            bottom: false,
+            child: Column(
+              children: [
+                _buildAppBar(stations),
+                Expanded(
+                  child: favState.isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : isDesktop
+                          ? _buildDesktopLayout(context, stations, userLocation)
+                          : _buildMobileLayout(context, stations, userLocation),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -181,8 +177,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
           if (stations.isNotEmpty) ...[
             const SizedBox(width: 8),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
                 color: Colors.red.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(10),
@@ -204,8 +199,8 @@ class _FavoritesPageState extends State<FavoritesPage> {
 
   // ─── Desktop ───────────────────────────────────────────────────────────────
 
-  Widget _buildDesktopLayout(BuildContext context,
-      List<GasStation> stations, UserLocation? userLocation) {
+  Widget _buildDesktopLayout(BuildContext context, List<GasStation> stations,
+      UserLocation? userLocation) {
     return Row(
       children: [
         // Lista verticale sinistra
@@ -213,17 +208,15 @@ class _FavoritesPageState extends State<FavoritesPage> {
           width: 380,
           decoration: const BoxDecoration(
             color: AppTheme.surfaceColor,
-            border:
-                Border(right: BorderSide(color: AppTheme.borderColor)),
+            border: Border(right: BorderSide(color: AppTheme.borderColor)),
           ),
           child: Column(
             children: [
               Container(
-                padding:
-                    const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
                 decoration: const BoxDecoration(
-                  border: Border(
-                      bottom: BorderSide(color: AppTheme.borderColor)),
+                  border:
+                      Border(bottom: BorderSide(color: AppTheme.borderColor)),
                 ),
                 child: Row(
                   children: [
@@ -256,20 +249,19 @@ class _FavoritesPageState extends State<FavoritesPage> {
                         controller: _listScrollController,
                         padding: const EdgeInsets.all(12),
                         children: stations.map((station) {
-                          final isSelected =
-                              _selectedStation?.id == station.id;
+                          final isSelected = _selectedStation?.id == station.id;
                           final key = _stationKeys.putIfAbsent(
                               station.id, () => GlobalKey());
                           return Padding(
                             key: key,
-                            padding: const EdgeInsets.only(
-                                bottom: _kCardSpacing),
+                            padding:
+                                const EdgeInsets.only(bottom: _kCardSpacing),
                             child: _FavDesktopCard(
                               station: station,
                               userLocation: userLocation,
                               isSelected: isSelected,
-                              onTap: () => _onCardTap(
-                                  context, station, userLocation),
+                              onTap: () =>
+                                  _onCardTap(context, station, userLocation),
                             ),
                           );
                         }).toList(),
@@ -287,21 +279,29 @@ class _FavoritesPageState extends State<FavoritesPage> {
 
   // ─── Mobile ────────────────────────────────────────────────────────────────
 
-  Widget _buildMobileLayout(BuildContext context,
-      List<GasStation> stations, UserLocation? userLocation) {
-    return Stack(
-      children: [
-        Positioned.fill(
-          bottom: 260,
-          child: _buildMap(stations, userLocation),
-        ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: _buildMobileBottomList(context, stations, userLocation),
-        ),
-      ],
+  Widget _buildMobileLayout(BuildContext context, List<GasStation> stations,
+      UserLocation? userLocation) {
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final bottomSheetHeight = 280.0 + bottomInset;
+
+    return SafeArea(
+      top: true,
+      bottom: false,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            bottom: bottomSheetHeight,
+            child: _buildMap(stations, userLocation),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: _buildMobileBottomList(
+                context, stations, userLocation, bottomInset),
+          ),
+        ],
+      ),
     );
   }
 
@@ -338,8 +338,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
           if (userLocation != null)
             MarkerLayer(markers: [
               Marker(
-                point:
-                    LatLng(userLocation.latitude, userLocation.longitude),
+                point: LatLng(userLocation.latitude, userLocation.longitude),
                 width: 44,
                 height: 44,
                 child: Container(
@@ -355,8 +354,8 @@ class _FavoritesPageState extends State<FavoritesPage> {
                       ),
                     ],
                   ),
-                  child: const Icon(Icons.person,
-                      color: Colors.white, size: 20),
+                  child:
+                      const Icon(Icons.person, color: Colors.white, size: 20),
                 ),
               ),
             ]),
@@ -364,8 +363,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
             markers: stations.map((station) {
               final isSelected = _selectedStation?.id == station.id;
               return Marker(
-                point:
-                    LatLng(station.latitude, station.longitude),
+                point: LatLng(station.latitude, station.longitude),
                 width: isSelected ? 48 : 40,
                 height: isSelected ? 48 : 40,
                 child: GestureDetector(
@@ -383,10 +381,9 @@ class _FavoritesPageState extends State<FavoritesPage> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: (isSelected
-                                  ? AppTheme.accentColor
-                                  : Colors.red)
-                              .withOpacity(0.5),
+                          color:
+                              (isSelected ? AppTheme.accentColor : Colors.red)
+                                  .withOpacity(0.5),
                           blurRadius: isSelected ? 14 : 6,
                           spreadRadius: isSelected ? 3 : 1,
                         ),
@@ -411,14 +408,14 @@ class _FavoritesPageState extends State<FavoritesPage> {
 
   // ─── Lista mobile (orizzontale) ────────────────────────────────────────────
 
-  Widget _buildMobileBottomList(BuildContext context,
-      List<GasStation> stations, UserLocation? userLocation) {
+  Widget _buildMobileBottomList(BuildContext context, List<GasStation> stations,
+      UserLocation? userLocation, double bottomInset) {
     return Container(
-      height: 260,
+      height: 280 + bottomInset,
+      padding: EdgeInsets.only(bottom: bottomInset),
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
-        borderRadius:
-            const BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.08),
@@ -450,8 +447,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: Row(
               children: [
-                const Icon(Icons.favorite_rounded,
-                    size: 13, color: Colors.red),
+                const Icon(Icons.favorite_rounded, size: 13, color: Colors.red),
                 const SizedBox(width: 6),
                 Text(
                   '${stations.length} stazioni preferite',
@@ -470,13 +466,11 @@ class _FavoritesPageState extends State<FavoritesPage> {
                 : ListView.builder(
                     controller: _mobileScrollController,
                     scrollDirection: Axis.horizontal,
-                    padding:
-                        const EdgeInsets.fromLTRB(12, 4, 12, 12),
+                    padding: EdgeInsets.fromLTRB(12, 4, 12, 14 + bottomInset),
                     itemCount: stations.length,
                     itemBuilder: (context, index) {
                       final station = stations[index];
-                      final isSelected =
-                          _selectedStation?.id == station.id;
+                      final isSelected = _selectedStation?.id == station.id;
                       return SizedBox(
                         width: 280,
                         child: Padding(
@@ -485,8 +479,8 @@ class _FavoritesPageState extends State<FavoritesPage> {
                             station: station,
                             userLocation: userLocation,
                             isSelected: isSelected,
-                            onTap: () => _onCardTap(
-                                context, station, userLocation),
+                            onTap: () =>
+                                _onCardTap(context, station, userLocation),
                           ),
                         ),
                       );
@@ -512,8 +506,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
             'Nessuna stazione preferita.\nTocca ♥ su un distributore per aggiungerlo.',
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
-                fontSize: 12,
-                color: AppTheme.textSecondaryColor),
+                fontSize: 12, color: AppTheme.textSecondaryColor),
           ),
         ],
       ),
@@ -553,8 +546,7 @@ class _FavDesktopCard extends StatelessWidget {
             onTap: onTap,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 8, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
                 color: isSelected
                     ? AppTheme.primaryColor
@@ -569,18 +561,14 @@ class _FavDesktopCard extends StatelessWidget {
                     style: GoogleFonts.poppins(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
-                      color: isSelected
-                          ? Colors.white
-                          : AppTheme.primaryColor,
+                      color: isSelected ? Colors.white : AppTheme.primaryColor,
                     ),
                   ),
                   const SizedBox(width: 3),
                   Icon(
                     Icons.arrow_forward,
                     size: 10,
-                    color: isSelected
-                        ? Colors.white
-                        : AppTheme.primaryColor,
+                    color: isSelected ? Colors.white : AppTheme.primaryColor,
                   ),
                 ],
               ),
@@ -601,8 +589,7 @@ class _GuestFavoritesView extends StatelessWidget {
     (Icons.favorite_rounded, 'Salva le stazioni con i prezzi migliori'),
     (Icons.bolt_rounded, 'Raggiungi i tuoi preferiti con un tocco'),
     (Icons.price_change_rounded, 'Tieni d\'occhio i prezzi nel tempo'),
-    (Icons.directions_car_rounded,
-        'Calcola il costo reale per il tuo veicolo'),
+    (Icons.directions_car_rounded, 'Calcola il costo reale per il tuo veicolo'),
   ];
 
   @override
@@ -624,8 +611,7 @@ class _GuestFavoritesView extends StatelessWidget {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -670,8 +656,7 @@ class _GuestFavoritesView extends StatelessWidget {
                           width: 36,
                           height: 36,
                           decoration: BoxDecoration(
-                            color:
-                                AppTheme.primaryColor.withOpacity(0.10),
+                            color: AppTheme.primaryColor.withOpacity(0.10),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(b.$1,
@@ -720,9 +705,8 @@ class _GuestFavoritesView extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(
-                  onPressed: () => context
-                      .read<AuthBloc>()
-                      .add(const SignOutEvent()),
+                  onPressed: () =>
+                      context.read<AuthBloc>().add(const SignOutEvent()),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     side: BorderSide(
