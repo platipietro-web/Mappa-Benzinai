@@ -55,6 +55,9 @@ post_install do |installer|
   runner_target = runner_project.targets.find { |t| t.name == 'Runner' }
 
   if runner_target
+    runner_target.build_configurations.each do |config|
+      config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64'
+    end
     phase_name = 'Strip Native Assets Extended Attributes'
     unless runner_target.build_phases.any? { |p| p.respond_to?(:name) && p.name == phase_name }
       phase = runner_target.new_shell_script_build_phase(phase_name)
