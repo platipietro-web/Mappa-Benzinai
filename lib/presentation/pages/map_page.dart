@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -13,6 +14,7 @@ import 'package:mappa_prezzi_benzina/presentation/bloc/map_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/location_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
 import 'package:mappa_prezzi_benzina/presentation/widgets/station_card.dart';
+import 'package:mappa_prezzi_benzina/presentation/widgets/station_pin.dart';
 import 'package:mappa_prezzi_benzina/presentation/widgets/filter_bottom_sheet.dart';
 import 'package:mappa_prezzi_benzina/core/services/geocoding_service.dart';
 
@@ -33,6 +35,15 @@ class _MapPageState extends State<MapPage> {
   List<String> _selectedFuelTypes = ['Benzina', 'Diesel'];
   List<String> _selectedBrands = [];
   String _sortBy = 'distance';
+  double _selectedRadiusKm = AppConstants.stationSearchRadius;
+  String _cityQuery = '';
+
+  // Quando true, la lista/mappa mostra l'istantanea congelata in
+  // _lockedStations invece di ricalcolare dai dati live: niente reload al
+  // pan/zoom né refresh periodico, finché l'utente non torna alla mappa
+  // standard (vedi _unlockFiltersAndReset).
+  bool _filtersLocked = false;
+  List<GasStation>? _lockedStations;
 
   Timer? _refreshTimer;
   Timer? _panDebounce;
@@ -86,12 +97,27 @@ class _MapPageState extends State<MapPage> {
 
   void _startAutoRefresh() {
     _refreshTimer = Timer.periodic(const Duration(minutes: 15), (_) {
+      // Risultati bloccati (filtri applicati): niente refresh finché
+      // l'utente non torna esplicitamente alla mappa standard.
+      if (_filtersLocked) return;
       context.read<MapBloc>().add(const RefreshStationsEvent());
     });
   }
 
   void _requestLocationAndLoadStations() {
     context.read<LocationBloc>().add(const RequestLocationPermissionEvent());
+  }
+
+  /// Pulsante "la mia posizione": se la abbiamo già, centra subito la mappa;
+  /// altrimenti la richiede da capo (utile quando il fix GPS iniziale è
+  /// fallito e la mappa è rimasta sul centro Italia di fallback).
+  void _goToMyLocation(MapLoaded state) {
+    final loc = state.userLocation;
+    if (loc != null) {
+      _mapController.move(LatLng(loc.latitude, loc.longitude), 14);
+    } else {
+      _requestLocationAndLoadStations();
+    }
   }
 
   double _getVisibleRadiusKm() {
@@ -111,7 +137,9 @@ class _MapPageState extends State<MapPage> {
 
   void _searchThisArea() {
     final center = _mapController.camera.center;
-    final radius = _getVisibleRadiusKm();
+    // Il fetch copre sempre almeno il raggio scelto nei filtri, anche se il
+    // viewport corrente (in base allo zoom) sarebbe più stretto.
+    final radius = math.max(_getVisibleRadiusKm(), _selectedRadiusKm);
     _lastLoadedCenter = center;
     _lastLoadedRadiusKm = radius;
     context.read<MapBloc>().add(LoadNearbyStationsEvent(
@@ -154,6 +182,10 @@ class _MapPageState extends State<MapPage> {
   // Intercetta solo eventi utente (drag/fling/zoom), ignora mosse programmatiche.
   // Guards: debounce 800ms + zoom minimo 8 + viewport coverage check.
   void _onMapEvent(MapEvent event) {
+    // 0. Risultati bloccati (filtri applicati): la mappa resta liberamente
+    //    pannabile/zoomabile, ma non deve innescare nuovi caricamenti.
+    if (_filtersLocked) return;
+
     // 1. Ignora mosse programmatiche (marker tap, geocoding, highlight preferiti)
     if (event.source == MapEventSource.mapController) return;
 
@@ -239,14 +271,43 @@ class _MapPageState extends State<MapPage> {
                   if (state is LocationLoaded) {
                     _lastLoadedCenter = LatLng(
                         state.location.latitude, state.location.longitude);
-                    _lastLoadedRadiusKm = AppConstants.stationSearchRadius;
+                    _lastLoadedRadiusKm = _selectedRadiusKm;
                     _loadNearbyStations(state.location);
+                    // Il primissimo fix GPS centra la mappa "gratis" tramite
+                    // initialCenter (FlutterMap non è ancora montata a quel
+                    // punto, quindi qui .move() fallirebbe silenziosamente).
+                    // Per i fix successivi (pulsante "la mia posizione",
+                    // retry dopo un errore) la mappa esiste già e va invece
+                    // spostata esplicitamente.
+                    try {
+                      _mapController.move(_lastLoadedCenter!, 14);
+                    } catch (_) {}
                   } else if (state is LocationPermissionDenied) {
                     _showLocationDeniedDialog();
                   } else if (state is LocationServiceDisabled) {
                     _showLocationDisabledDialog();
                   } else if (state is LocationError) {
                     _showErrorSnackbar(state.message);
+                    // La geolocalizzazione può fallire per motivi fuori dal
+                    // nostro controllo (rete, provider di posizione del
+                    // browser/OS): senza questo fallback la mappa restava
+                    // vuota all'infinito. Carichiamo comunque i distributori
+                    // intorno al centro Italia, con isGpsLocation:false così
+                    // non viene scambiato per una posizione utente reale.
+                    if (_lastLoadedCenter == null) {
+                      _lastLoadedCenter = const LatLng(
+                          AppConstants.defaultLatitude,
+                          AppConstants.defaultLongitude);
+                      _lastLoadedRadiusKm = _selectedRadiusKm;
+                      _loadNearbyStations(
+                        UserLocation(
+                          latitude: AppConstants.defaultLatitude,
+                          longitude: AppConstants.defaultLongitude,
+                          timestamp: DateTime.now(),
+                        ),
+                        isGpsLocation: false,
+                      );
+                    }
                   }
                 },
               ),
@@ -425,6 +486,7 @@ class _MapPageState extends State<MapPage> {
     return Column(
       children: [
         _buildAppBar(state),
+        _buildLockedResultsBanner(),
         Expanded(
           child: Row(
             children: [
@@ -540,6 +602,7 @@ class _MapPageState extends State<MapPage> {
       child: Column(
         children: [
           _buildAppBar(state),
+          _buildLockedResultsBanner(),
           Expanded(
             child: Stack(
               children: [
@@ -603,17 +666,13 @@ class _MapPageState extends State<MapPage> {
         ),
         const SizedBox(height: 8),
         // La mia posizione
-        if (state.userLocation != null)
-          _mapFab(
-            icon: Icons.my_location_rounded,
-            tooltip: 'La mia posizione',
-            color: AppTheme.primaryColor,
-            iconColor: Colors.white,
-            onTap: () {
-              final loc = state.userLocation!;
-              _mapController.move(LatLng(loc.latitude, loc.longitude), 14);
-            },
-          ),
+        _mapFab(
+          icon: Icons.my_location_rounded,
+          tooltip: 'La mia posizione',
+          color: AppTheme.primaryColor,
+          iconColor: Colors.white,
+          onTap: () => _goToMyLocation(state),
+        ),
       ],
     );
   }
@@ -692,12 +751,8 @@ class _MapPageState extends State<MapPage> {
                 _iconBtn(Icons.refresh_rounded, 'Aggiorna', () {
                   context.read<MapBloc>().add(const RefreshStationsEvent());
                 }),
-                if (state.userLocation != null)
-                  _iconBtn(Icons.my_location_rounded, 'La mia posizione', () {
-                    final loc = state.userLocation!;
-                    _mapController.move(
-                        LatLng(loc.latitude, loc.longitude), 14);
-                  }),
+                _iconBtn(Icons.my_location_rounded, 'La mia posizione',
+                    () => _goToMyLocation(state)),
                 const SizedBox(width: 4),
                 Tooltip(
                   message: 'Profilo',
@@ -979,41 +1034,20 @@ class _MapPageState extends State<MapPage> {
           MarkerLayer(
             markers: stations.map((station) {
               final isSelected = state.selectedStation?.id == station.id;
+              final pin = StationPin(
+                brand: station.brand,
+                selected: isSelected,
+                size: isSelected ? 48 : 32,
+              );
               return Marker(
                 point: LatLng(station.latitude, station.longitude),
-                width: isSelected ? 48 : 40,
-                height: isSelected ? 48 : 40,
+                width: pin.boxSize,
+                height: pin.boxSize,
+                alignment: pin.markerAlignment,
                 child: GestureDetector(
                   // Click marker → evidenzia nella lista, NON apre dettaglio
                   onTap: () => _onMarkerTap(station),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? AppTheme.accentColor
-                          : AppTheme.secondaryColor,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.white,
-                        width: isSelected ? 3 : 2,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: (isSelected
-                                  ? AppTheme.accentColor
-                                  : AppTheme.secondaryColor)
-                              .withOpacity(0.5),
-                          blurRadius: isSelected ? 14 : 6,
-                          spreadRadius: isSelected ? 3 : 1,
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      Icons.local_gas_station,
-                      color: Colors.white,
-                      size: isSelected ? 22 : 18,
-                    ),
-                  ),
+                  child: pin,
                 ),
               );
             }).toList(),
@@ -1274,24 +1308,35 @@ class _MapPageState extends State<MapPage> {
     List<GasStation> stations, {
     UserLocation? userLocation,
   }) {
+    // Risultati bloccati: ignora i dati live, mostra sempre l'istantanea
+    // calcolata al momento di "Applica" nel foglio filtri.
+    if (_filtersLocked && _lockedStations != null) return _lockedStations!;
+
     final effectiveTypes = _expandFuelTypes(_selectedFuelTypes);
 
-    // ── Viewport filter ───────────────────────────────────────────────────
-    List<GasStation> inView = stations;
+    // ── Raggio esplicito (sostituisce il vecchio filtro sul viewport) ─────
+    // Il raggio scelto nei filtri è sempre rispettato, indipendentemente da
+    // quanto si è zoomati/da cosa è visibile a schermo in quel momento.
+    List<GasStation> inRange = stations;
     try {
-      final bounds = _mapController.camera.visibleBounds;
-      inView = stations
-          .where((s) => bounds.contains(LatLng(s.latitude, s.longitude)))
+      final center = _mapController.camera.center;
+      inRange = stations
+          .where((s) => s.getDistanceFromCoordinates(
+                  center.latitude, center.longitude) <=
+              _selectedRadiusKm)
           .toList();
     } catch (_) {}
 
-    // ── Fuel / brand filter ───────────────────────────────────────────────
-    final filtered = inView.where((s) {
+    // ── Fuel / brand / città filter ────────────────────────────────────────
+    final cityQuery = _cityQuery.trim().toLowerCase();
+    final filtered = inRange.where((s) {
       final fuelMatch = s.prices.isEmpty ||
           effectiveTypes.any((ft) => s.prices.containsKey(ft));
       final brandMatch = _selectedBrands.isEmpty ||
           (s.brand != null && _selectedBrands.contains(s.brand));
-      return fuelMatch && brandMatch;
+      final cityMatch =
+          cityQuery.isEmpty || s.address.toLowerCase().contains(cityQuery);
+      return fuelMatch && brandMatch && cityMatch;
     }).toList();
 
     // ── Sort ──────────────────────────────────────────────────────────────
@@ -1392,11 +1437,11 @@ class _MapPageState extends State<MapPage> {
     }
   }
 
-  void _loadNearbyStations(UserLocation location) {
+  void _loadNearbyStations(UserLocation location, {bool isGpsLocation = true}) {
     context.read<MapBloc>().add(LoadNearbyStationsEvent(
           location: location,
-          radiusKm: AppConstants.stationSearchRadius,
-          isGpsLocation: true,
+          radiusKm: _selectedRadiusKm,
+          isGpsLocation: isGpsLocation,
         ));
   }
 
@@ -1409,13 +1454,100 @@ class _MapPageState extends State<MapPage> {
         selectedFuelTypes: _selectedFuelTypes,
         selectedBrands: _selectedBrands,
         sortBy: _sortBy,
-        onApply: (fuelTypes, brands, sortBy) {
+        radiusKm: _selectedRadiusKm,
+        cityQuery: _cityQuery,
+        onApply: (fuelTypes, brands, sortBy, radiusKm, cityQuery) async {
+          final mapBloc = context.read<MapBloc>();
+          final radiusChanged = radiusKm != _selectedRadiusKm;
           setState(() {
             _selectedFuelTypes = fuelTypes;
             _selectedBrands = brands;
             _sortBy = sortBy;
+            _selectedRadiusKm = radiusKm;
+            _cityQuery = cityQuery;
           });
+
+          if (radiusChanged) {
+            // Il fetch dal backend potrebbe non coprire ancora il nuovo
+            // raggio (es. utente allarga da 10 a 100km senza spostare la
+            // mappa): aspettiamo che arrivino i dati freschi prima di
+            // congelare l'istantanea, altrimenti bloccheremmo un risultato
+            // incompleto.
+            _searchThisArea();
+            try {
+              await mapBloc.stream.firstWhere((s) => s is MapLoaded);
+            } catch (_) {}
+          }
+
+          if (!mounted) return;
+          final mapState = mapBloc.state;
+          if (mapState is MapLoaded) {
+            setState(() {
+              _lockedStations = _filterAndSortStations(mapState.stations,
+                  userLocation: mapState.userLocation);
+              _filtersLocked = true;
+            });
+          }
         },
+      ),
+    );
+  }
+
+  /// Bottone "torna alla mappa standard": esce dai risultati bloccati,
+  /// resetta i filtri ai valori di default e riprende gli aggiornamenti live
+  /// (pan/zoom + refresh periodico).
+  void _unlockFiltersAndReset() {
+    setState(() {
+      _filtersLocked = false;
+      _lockedStations = null;
+      _selectedFuelTypes = ['Benzina', 'Diesel'];
+      _selectedBrands = [];
+      _sortBy = 'distance';
+      _selectedRadiusKm = AppConstants.stationSearchRadius;
+      _cityQuery = '';
+    });
+    _searchThisArea();
+  }
+
+  Widget _buildLockedResultsBanner() {
+    if (!_filtersLocked) return const SizedBox.shrink();
+    final count = _lockedStations?.length ?? 0;
+    return Container(
+      width: double.infinity,
+      color: AppTheme.primaryColor.withOpacity(0.08),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          const Icon(Icons.lock_outline_rounded,
+              size: 16, color: AppTheme.primaryColor),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Mappa con filtri · $count distributori',
+              style: GoogleFonts.poppins(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.primaryColor,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: _unlockFiltersAndReset,
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(
+              'Torna alla mappa standard',
+              style: GoogleFonts.poppins(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.primaryColor,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

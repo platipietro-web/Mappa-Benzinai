@@ -6,13 +6,17 @@ class FilterBottomSheet extends StatefulWidget {
   final List<String> selectedFuelTypes;
   final List<String> selectedBrands;
   final String sortBy;
-  final Function(List<String>, List<String>, String) onApply;
+  final double radiusKm;
+  final String cityQuery;
+  final Function(List<String>, List<String>, String, double, String) onApply;
 
   const FilterBottomSheet({
     Key? key,
     required this.selectedFuelTypes,
     required this.selectedBrands,
     required this.sortBy,
+    required this.radiusKm,
+    required this.cityQuery,
     required this.onApply,
   }) : super(key: key);
 
@@ -24,6 +28,10 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
   late List<String> _selectedFuelTypes;
   late List<String> _selectedBrands;
   late String _sortBy;
+  late double _radiusKm;
+  late TextEditingController _cityController;
+
+  static const List<double> _radiusOptions = [5, 10, 25, 50, 100];
 
   // Tutti i tipi carburante con colore e icona
   static const _fuelTypes = [
@@ -54,6 +62,14 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
     _selectedFuelTypes = List.from(widget.selectedFuelTypes);
     _selectedBrands = List.from(widget.selectedBrands);
     _sortBy = widget.sortBy;
+    _radiusKm = widget.radiusKm;
+    _cityController = TextEditingController(text: widget.cityQuery);
+  }
+
+  @override
+  void dispose() {
+    _cityController.dispose();
+    super.dispose();
   }
 
   @override
@@ -183,6 +199,70 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
 
               const SizedBox(height: 24),
 
+              // ── Raggio ───────────────────────────────────────────────────
+              _sectionHeader('Raggio di ricerca', null),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _radiusOptions.map((km) {
+                  final isSelected = _radiusKm == km;
+                  return ChoiceChip(
+                    label: Text('${km.toInt()} km'),
+                    selected: isSelected,
+                    onSelected: (_) => setState(() => _radiusKm = km),
+                    backgroundColor: AppTheme.backgroundColor,
+                    selectedColor: AppTheme.primaryColor.withOpacity(0.15),
+                    labelStyle: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: isSelected
+                          ? AppTheme.primaryColor
+                          : AppTheme.textPrimaryColor,
+                    ),
+                    side: BorderSide(
+                      color: isSelected
+                          ? AppTheme.primaryColor
+                          : AppTheme.borderColor,
+                    ),
+                  );
+                }).toList(),
+              ),
+
+              const SizedBox(height: 24),
+
+              // ── Città ────────────────────────────────────────────────────
+              _sectionHeader('Città', null),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _cityController,
+                decoration: InputDecoration(
+                  hintText: 'Es. Milano, Roma...',
+                  hintStyle: GoogleFonts.poppins(
+                      fontSize: 14, color: AppTheme.textSecondaryColor),
+                  prefixIcon: const Icon(Icons.location_city_rounded,
+                      size: 20, color: AppTheme.textSecondaryColor),
+                  suffixIcon: _cityController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear_rounded, size: 18),
+                          onPressed: () =>
+                              setState(() => _cityController.clear()),
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: AppTheme.backgroundColor,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                style: GoogleFonts.poppins(fontSize: 14),
+                onChanged: (_) => setState(() {}),
+              ),
+
+              const SizedBox(height: 24),
+
               // ── Ordina per ───────────────────────────────────────────────
               _sectionHeader('Ordina per', null),
               const SizedBox(height: 8),
@@ -233,7 +313,12 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                     child: ElevatedButton(
                       onPressed: () {
                         widget.onApply(
-                            _selectedFuelTypes, _selectedBrands, _sortBy);
+                          _selectedFuelTypes,
+                          _selectedBrands,
+                          _sortBy,
+                          _radiusKm,
+                          _cityController.text,
+                        );
                         Navigator.pop(context);
                       },
                       child: Text('Applica',

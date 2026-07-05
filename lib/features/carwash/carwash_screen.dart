@@ -119,11 +119,12 @@ class _CarWashScreenState extends State<CarWashScreen> {
     setState(() => _searchLoading = true);
     _searchDebounce = Timer(const Duration(milliseconds: 400), () async {
       final results = await GeocodingService.search(query);
-      if (mounted)
+      if (mounted) {
         setState(() {
           _searchResults = results;
           _searchLoading = false;
         });
+      }
     });
   }
 
@@ -804,8 +805,9 @@ class _CarWashScreenState extends State<CarWashScreen> {
             autofocus: true,
             onChanged: _onSearchChanged,
             onSubmitted: (_) {
-              if (_searchResults.isNotEmpty)
+              if (_searchResults.isNotEmpty) {
                 _onResultSelected(_searchResults.first);
+              }
             },
             decoration: InputDecoration(
               hintText: 'Cerca una zona...',
