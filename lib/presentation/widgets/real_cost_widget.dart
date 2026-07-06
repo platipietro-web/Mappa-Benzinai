@@ -2,14 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mappa_prezzi_benzina/core/services/real_cost_calculator.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/real_cost_result.dart';
-import 'package:mappa_prezzi_benzina/domain/entities/user_profile.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
 
 class RealCostWidget extends StatelessWidget {
   final double distanceKm;
   final double fuelPrice;
   final double areaAvgPrice;
-  final UserProfile profile;
+  final double consumption; // L/100km dichiarato dal veicolo
+  final double tankSize; // litri
+  final String vehicleLabel;
   final String fuelType;
 
   const RealCostWidget({
@@ -17,7 +18,9 @@ class RealCostWidget extends StatelessWidget {
     required this.distanceKm,
     required this.fuelPrice,
     required this.areaAvgPrice,
-    required this.profile,
+    required this.consumption,
+    required this.tankSize,
+    required this.vehicleLabel,
     required this.fuelType,
   }) : super(key: key);
 
@@ -29,11 +32,10 @@ class RealCostWidget extends StatelessWidget {
       distanceKm: distanceKm,
       fuelPrice: fuelPrice,
       areaAvgPrice: areaAvgPrice,
-      profile: profile,
+      consumption: consumption,
+      tankSize: tankSize,
     );
 
-    final consumption = profile.fuelConsumption;
-    final tankSize = profile.tankSize;
     final roundTripKm = distanceKm * 2;
 
     final isWorth = result.isWorthIt;
@@ -58,8 +60,8 @@ class RealCostWidget extends StatelessWidget {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  profile.vehicleName.isNotEmpty
-                      ? 'Stima costo reale · ${profile.vehicleName}'
+                  vehicleLabel.isNotEmpty
+                      ? 'Stima costo reale · $vehicleLabel'
                       : 'Stima costo reale',
                   style: GoogleFonts.poppins(
                     fontSize: 13,

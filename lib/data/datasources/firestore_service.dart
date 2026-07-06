@@ -10,8 +10,6 @@ import 'package:mappa_prezzi_benzina/domain/entities/price_snapshot.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/refueling_log.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/saved_station.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/user_profile.dart';
-import 'package:mappa_prezzi_benzina/domain/entities/vehicle_profile.dart';
-import 'package:uuid/uuid.dart';
 
 abstract class FirestoreService {
   Future<List<GasStationModel>> getNearbyStations(
@@ -268,38 +266,10 @@ class FirestoreServiceImpl implements FirestoreService {
       if (!doc.exists || doc.data() == null) return null;
       final d = doc.data()!;
 
-      List<VehicleProfile> vehicles = [];
-      String? activeVehicleId;
-
-      if (d.containsKey('vehicles') && d['vehicles'] is List) {
-        // Formato nuovo: lista veicoli
-        final rawList = d['vehicles'] as List<dynamic>;
-        vehicles = rawList
-            .whereType<Map<String, dynamic>>()
-            .map(VehicleProfile.fromMap)
-            .toList();
-        activeVehicleId = d['activeVehicleId'] as String?;
-      } else if (d.containsKey('fuelConsumption')) {
-        // Migrazione formato legacy → crea un veicolo di default
-        final legacy = VehicleProfile(
-          id: const Uuid().v4(),
-          name: 'Il mio veicolo',
-          fuelConsumption:
-              (d['fuelConsumption'] as num?)?.toDouble() ?? 10.0,
-          tankSize: (d['tankSize'] as num?)?.toDouble() ?? 50.0,
-          preferredFuelType:
-              d['preferredFuelType'] as String? ?? 'Benzina',
-        );
-        vehicles = [legacy];
-        activeVehicleId = legacy.id;
-      }
-
       return UserProfile(
         userId: userId,
         email: d['email'] as String?,
         displayName: d['displayName'] as String?,
-        vehicles: vehicles,
-        activeVehicleId: activeVehicleId,
       );
     } catch (e) {
       logError('Firestore: error fetching user profile', e);
@@ -314,8 +284,6 @@ class FirestoreServiceImpl implements FirestoreService {
           .collection(AppConstants.usersCollection)
           .doc(profile.userId)
           .set({
-        'vehicles': profile.vehicles.map((v) => v.toMap()).toList(),
-        'activeVehicleId': profile.activeVehicleId,
         if (profile.displayName != null && profile.displayName!.isNotEmpty)
           'displayName': profile.displayName,
       }, SetOptions(merge: true));
@@ -442,6 +410,19 @@ class FirestoreServiceImpl implements FirestoreService {
         for (final doc in docs.docs) {
           await doc.reference.delete();
         }
+      }
+
+      // Veicoli: ognuno ha una sotto-collezione di spese da svuotare prima
+      final vehicles =
+          await userRef.collection(AppConstants.vehiclesCollection).get();
+      for (final vehicleDoc in vehicles.docs) {
+        final costEntries = await vehicleDoc.reference
+            .collection(AppConstants.vehicleCostEntriesCollection)
+            .get();
+        for (final entryDoc in costEntries.docs) {
+          await entryDoc.reference.delete();
+        }
+        await vehicleDoc.reference.delete();
       }
 
       await userRef.delete();

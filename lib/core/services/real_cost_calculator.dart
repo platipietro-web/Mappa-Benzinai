@@ -1,5 +1,4 @@
 import 'package:mappa_prezzi_benzina/domain/entities/real_cost_result.dart';
-import 'package:mappa_prezzi_benzina/domain/entities/user_profile.dart';
 
 class RealCostCalculator {
   /// Calcola il costo reale di rifornimento tenendo conto del tragitto.
@@ -12,11 +11,9 @@ class RealCostCalculator {
     required double distanceKm,
     required double fuelPrice,
     required double areaAvgPrice,
-    required UserProfile profile,
+    required double consumption,
+    required double tankSize,
   }) {
-    final consumption = profile.fuelConsumption;
-    final tankSize = profile.tankSize;
-
     final tripLiters = (distanceKm * 2.0 * consumption) / 100.0;
     final tripFuelCost = tripLiters * fuelPrice;
 

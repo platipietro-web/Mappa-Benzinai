@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/dashboard_stats.dart';
+import 'package:mappa_prezzi_benzina/features/vehicles/vehicle_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/dashboard_bloc.dart';
-import 'package:mappa_prezzi_benzina/presentation/bloc/user_profile_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
 
 class DashboardPage extends StatelessWidget {
@@ -42,8 +42,8 @@ class DashboardPage extends StatelessWidget {
             return _emptyState();
           }
 
-          final profileState = context.watch<UserProfileBloc>().state;
-          final vehicleName = profileState.profile?.vehicleName ?? '';
+          final vehicleName =
+              context.watch<VehicleBloc>().state.defaultVehicle?.name ?? '';
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(20),

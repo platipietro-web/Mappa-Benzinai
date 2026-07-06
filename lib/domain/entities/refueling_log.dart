@@ -12,6 +12,8 @@ class RefuelingLog extends Equatable {
   final double savedVsArea; // risparmio vs prezzo medio zona (può essere negativo)
   final double areaAvgPrice; // prezzo medio zona al momento del rifornimento
   final DateTime timestamp;
+  final String? vehicleId; // null = rifornimento non collegato a un veicolo
+  final int? odometerKm;
 
   const RefuelingLog({
     required this.id,
@@ -25,6 +27,8 @@ class RefuelingLog extends Equatable {
     required this.savedVsArea,
     required this.areaAvgPrice,
     required this.timestamp,
+    this.vehicleId,
+    this.odometerKm,
   });
 
   @override

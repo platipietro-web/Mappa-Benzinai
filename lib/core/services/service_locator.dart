@@ -36,6 +36,12 @@ import 'package:mappa_prezzi_benzina/features/carwash/carwash_repository_impl.da
 import 'package:mappa_prezzi_benzina/features/carwash/carwash_service.dart';
 import 'package:mappa_prezzi_benzina/features/carwash/osm_carwash_importer.dart';
 
+// Vehicles feature
+import 'package:mappa_prezzi_benzina/features/vehicles/vehicle_bloc.dart';
+import 'package:mappa_prezzi_benzina/features/vehicles/vehicle_repository.dart';
+import 'package:mappa_prezzi_benzina/features/vehicles/vehicle_repository_impl.dart';
+import 'package:mappa_prezzi_benzina/features/vehicles/vehicle_service.dart';
+
 final getIt = GetIt.instance;
 
 void setupServiceLocator() {
@@ -100,4 +106,11 @@ void setupServiceLocator() {
       CarWashBloc(getIt<CarWashRepository>()));
   getIt.registerSingleton<CarWashFavoritesBloc>(
       CarWashFavoritesBloc(firestore));
+
+  // Vehicles feature
+  getIt.registerSingleton<VehicleService>(VehicleServiceImpl(firestore));
+  getIt.registerSingleton<VehicleRepository>(
+      VehicleRepositoryImpl(getIt<VehicleService>()));
+  getIt.registerSingleton<VehicleBloc>(
+      VehicleBloc(getIt<VehicleRepository>(), getIt<AnalyticsRepository>()));
 }

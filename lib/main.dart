@@ -21,6 +21,7 @@ import 'package:mappa_prezzi_benzina/presentation/pages/favorites_page.dart';
 import 'package:mappa_prezzi_benzina/presentation/pages/profile_page.dart';
 import 'package:mappa_prezzi_benzina/features/carwash/carwash_bloc.dart';
 import 'package:mappa_prezzi_benzina/features/carwash/carwash_favorites_bloc.dart';
+import 'package:mappa_prezzi_benzina/features/vehicles/vehicle_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/pages/legal_page.dart';
 
 void main() async {
@@ -57,6 +58,7 @@ class MyApp extends StatelessWidget {
         BlocProvider<CarWashBloc>(create: (_) => getIt<CarWashBloc>()),
         BlocProvider<CarWashFavoritesBloc>(
             create: (_) => getIt<CarWashFavoritesBloc>()),
+        BlocProvider<VehicleBloc>(create: (_) => getIt<VehicleBloc>()),
       ],
       child: MaterialApp(
         title: 'Prezzi Benzina',
@@ -78,6 +80,9 @@ class MyApp extends StatelessWidget {
               context
                   .read<DashboardBloc>()
                   .add(LoadDashboardEvent(state.userId));
+              context
+                  .read<VehicleBloc>()
+                  .add(LoadVehiclesEvent(state.userId));
             } else if (state is Unauthenticated) {
               context.read<FavoritesBloc>().add(const ClearFavoritesEvent());
               context
@@ -87,6 +92,7 @@ class MyApp extends StatelessWidget {
                   .read<UserProfileBloc>()
                   .add(const ClearUserProfileEvent());
               context.read<DashboardBloc>().add(const ClearDashboardEvent());
+              context.read<VehicleBloc>().add(const ClearVehiclesEvent());
             }
           },
           child: BlocBuilder<AuthBloc, AuthState>(

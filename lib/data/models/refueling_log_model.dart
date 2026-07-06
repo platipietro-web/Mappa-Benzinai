@@ -14,6 +14,8 @@ class RefuelingLogModel extends RefuelingLog {
     required super.savedVsArea,
     required super.areaAvgPrice,
     required super.timestamp,
+    super.vehicleId,
+    super.odometerKm,
   });
 
   factory RefuelingLogModel.fromFirestore(
@@ -30,6 +32,8 @@ class RefuelingLogModel extends RefuelingLog {
       savedVsArea: (data['savedVsArea'] as num?)?.toDouble() ?? 0.0,
       areaAvgPrice: (data['areaAvgPrice'] as num?)?.toDouble() ?? 0.0,
       timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      vehicleId: data['vehicleId'] as String?,
+      odometerKm: (data['odometerKm'] as num?)?.toInt(),
     );
   }
 
@@ -44,5 +48,7 @@ class RefuelingLogModel extends RefuelingLog {
         'savedVsArea': savedVsArea,
         'areaAvgPrice': areaAvgPrice,
         'timestamp': FieldValue.serverTimestamp(),
+        if (vehicleId != null) 'vehicleId': vehicleId,
+        if (odometerKm != null) 'odometerKm': odometerKm,
       };
 }
