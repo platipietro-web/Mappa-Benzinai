@@ -89,7 +89,7 @@ class _CarWashScreenState extends State<CarWashScreen> {
     });
   }
 
-  // ─── Search zone ────────────────────────────────────────────────────────────
+  // ─── Search zone ───────────────────────────────────────────────────────────
 
   void _activateSearch() => setState(() {
         _searchActive = true;
