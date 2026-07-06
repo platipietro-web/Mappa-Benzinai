@@ -5,6 +5,7 @@ import 'package:mappa_prezzi_benzina/core/constants/app_constants.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/car_wash.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/user_location.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
+import 'package:mappa_prezzi_benzina/presentation/widgets/current_location_marker.dart';
 
 const _kCarWashColor = Color(0xFF0891B2); // cyan-600
 
@@ -68,23 +69,9 @@ class CarWashMap extends StatelessWidget {
 
   Marker _userMarker(UserLocation loc) => Marker(
         point: LatLng(loc.latitude, loc.longitude),
-        width: 44,
-        height: 44,
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppTheme.primaryColor,
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 3),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.primaryColor.withOpacity(0.4),
-                blurRadius: 10,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: const Icon(Icons.person, color: Colors.white, size: 20),
-        ),
+        width: 28,
+        height: 28,
+        child: const CurrentLocationMarker(),
       );
 
   Marker _washMarker(CarWash wash) {

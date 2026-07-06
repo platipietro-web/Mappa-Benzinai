@@ -13,6 +13,7 @@ import 'package:mappa_prezzi_benzina/presentation/bloc/favorites_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/map_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/location_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
+import 'package:mappa_prezzi_benzina/presentation/widgets/current_location_marker.dart';
 import 'package:mappa_prezzi_benzina/presentation/widgets/station_card.dart';
 import 'package:mappa_prezzi_benzina/presentation/widgets/station_pin.dart';
 import 'package:mappa_prezzi_benzina/presentation/widgets/filter_bottom_sheet.dart';
@@ -711,6 +712,7 @@ class _MapPageState extends State<MapPage> {
   // ─── AppBar ────────────────────────────────────────────────────────────────
 
   Widget _buildAppBar(MapLoaded state) {
+    final isDesktop = MediaQuery.of(context).size.width >= _kDesktopBreakpoint;
     return Container(
       height: 56,
       decoration: const BoxDecoration(
@@ -747,7 +749,9 @@ class _MapPageState extends State<MapPage> {
                 ),
                 const Spacer(),
                 _iconBtn(Icons.search_rounded, 'Cerca zona', _activateSearch),
-                _iconBtn(Icons.tune_rounded, 'Filtri', _showFilterBottomSheet),
+                const SizedBox(width: 4),
+                _filterBtn(showLabel: isDesktop),
+                const SizedBox(width: 4),
                 _iconBtn(Icons.refresh_rounded, 'Aggiorna', () {
                   context.read<MapBloc>().add(const RefreshStationsEvent());
                 }),
@@ -979,6 +983,45 @@ class _MapPageState extends State<MapPage> {
     );
   }
 
+  /// Pulsante Filtri: evidenziato (sfondo pieno) rispetto agli altri
+  /// pulsanti-icona della toolbar, perché per un'app di prezzi carburante
+  /// è la feature più importante. Con `showLabel` mostra anche il testo
+  /// "Filtri", utile per chi non riconosce l'icona a slider a colpo d'occhio.
+  Widget _filterBtn({required bool showLabel}) {
+    return Tooltip(
+      message: 'Filtri',
+      child: InkWell(
+        onTap: _showFilterBottomSheet,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          height: 36,
+          padding: EdgeInsets.symmetric(horizontal: showLabel ? 14 : 8),
+          decoration: BoxDecoration(
+            color: AppTheme.primaryColor,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.tune_rounded, size: 20, color: Colors.white),
+              if (showLabel) ...[
+                const SizedBox(width: 6),
+                Text(
+                  'Filtri',
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // ─── Mappa ─────────────────────────────────────────────────────────────────
 
   Widget _buildMap(MapLoaded state, List<GasStation> stations) {
@@ -1011,24 +1054,9 @@ class _MapPageState extends State<MapPage> {
             MarkerLayer(markers: [
               Marker(
                 point: LatLng(userLocation.latitude, userLocation.longitude),
-                width: 44,
-                height: 44,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryColor,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 3),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.primaryColor.withOpacity(0.4),
-                        blurRadius: 10,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                  child:
-                      const Icon(Icons.person, color: Colors.white, size: 20),
-                ),
+                width: 28,
+                height: 28,
+                child: const CurrentLocationMarker(),
               ),
             ]),
           MarkerLayer(
@@ -1037,7 +1065,7 @@ class _MapPageState extends State<MapPage> {
               final pin = StationPin(
                 brand: station.brand,
                 selected: isSelected,
-                size: isSelected ? 48 : 32,
+                size: isSelected ? 54 : 36,
               );
               return Marker(
                 point: LatLng(station.latitude, station.longitude),

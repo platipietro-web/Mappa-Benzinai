@@ -11,6 +11,7 @@ import 'package:mappa_prezzi_benzina/presentation/bloc/auth_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/favorites_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/location_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
+import 'package:mappa_prezzi_benzina/presentation/widgets/current_location_marker.dart';
 import 'package:mappa_prezzi_benzina/presentation/widgets/station_card.dart';
 
 const _kDesktopBreakpoint = 768.0;
@@ -339,24 +340,9 @@ class _FavoritesPageState extends State<FavoritesPage> {
             MarkerLayer(markers: [
               Marker(
                 point: LatLng(userLocation.latitude, userLocation.longitude),
-                width: 44,
-                height: 44,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryColor,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 3),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.primaryColor.withOpacity(0.4),
-                        blurRadius: 10,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                  child:
-                      const Icon(Icons.person, color: Colors.white, size: 20),
-                ),
+                width: 28,
+                height: 28,
+                child: const CurrentLocationMarker(),
               ),
             ]),
           MarkerLayer(
