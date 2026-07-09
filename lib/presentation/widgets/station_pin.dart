@@ -14,6 +14,7 @@ class StationPin extends StatelessWidget {
     required this.brand,
     this.selected = false,
     this.size = 32,
+    this.priceColor,
   });
 
   final String? brand;
@@ -22,6 +23,10 @@ class StationPin extends StatelessWidget {
   /// Diametro "nominale" del pin (senza il margine extra per anello/ombra
   /// dello stato selezionato). 32 = standard, 48 = selezionato.
   final double size;
+
+  /// Colore della sagoma in base al prezzo rispetto alla media zona
+  /// (verde/giallo/rosso). Se null usa il colore neutro di default.
+  final Color? priceColor;
 
   static const double _viewBox = 36;
   static const double _contentRadius = 6.6;
@@ -55,7 +60,12 @@ class StationPin extends StatelessWidget {
         children: [
           Positioned.fill(
             child: CustomPaint(
-              painter: _PinShellPainter(pad: _pad, size: size, selected: selected),
+              painter: _PinShellPainter(
+                pad: _pad,
+                size: size,
+                selected: selected,
+                shellColor: priceColor ?? _PinShellPainter.ink,
+              ),
             ),
           ),
           // Alla scala "puntino" (< 24) lo slot non ospita dettagli
@@ -77,11 +87,17 @@ class StationPin extends StatelessWidget {
 }
 
 class _PinShellPainter extends CustomPainter {
-  const _PinShellPainter({required this.pad, required this.size, required this.selected});
+  const _PinShellPainter({
+    required this.pad,
+    required this.size,
+    required this.selected,
+    required this.shellColor,
+  });
 
   final double pad;
   final double size;
   final bool selected;
+  final Color shellColor;
 
   static const Color ink = Color(0xFF1F2937);
   static const Color slot = Colors.white;
@@ -134,7 +150,7 @@ class _PinShellPainter extends CustomPainter {
       );
     }
 
-    canvas.drawPath(_pinPath, Paint()..color = ink);
+    canvas.drawPath(_pinPath, Paint()..color = shellColor);
 
     if (size >= 24) {
       canvas.drawCircle(const Offset(18, 13.5), 8.5, Paint()..color = slot);
@@ -149,5 +165,8 @@ class _PinShellPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _PinShellPainter oldDelegate) =>
-      oldDelegate.selected != selected || oldDelegate.size != size || oldDelegate.pad != pad;
+      oldDelegate.selected != selected ||
+      oldDelegate.size != size ||
+      oldDelegate.pad != pad ||
+      oldDelegate.shellColor != shellColor;
 }

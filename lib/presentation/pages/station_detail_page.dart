@@ -21,6 +21,7 @@ import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
 import 'package:mappa_prezzi_benzina/presentation/widgets/price_trend_widget.dart';
 import 'package:mappa_prezzi_benzina/presentation/widgets/real_cost_widget.dart';
 import 'package:mappa_prezzi_benzina/presentation/widgets/refueling_sheet.dart';
+import 'package:mappa_prezzi_benzina/presentation/widgets/updated_at_label.dart';
 import 'package:uuid/uuid.dart';
 
 // Mappa colori e icone per tipo carburante
@@ -494,13 +495,7 @@ class _StationDetailPageState extends State<StationDetailPage> {
           ],
           if (station.lastUpdated != null) ...[
             const SizedBox(height: 12),
-            Text(
-              'Aggiornato: ${_formatTime(station.lastUpdated!)}',
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                color: AppTheme.textSecondaryColor,
-              ),
-            ),
+            UpdatedAtLabel(lastUpdated: station.lastUpdated!),
           ],
 
           // Costo reale personalizzato
@@ -871,10 +866,4 @@ class _StationDetailPageState extends State<StationDetailPage> {
     );
   }
 
-  String _formatTime(DateTime dateTime) {
-    final diff = DateTime.now().difference(dateTime);
-    if (diff.inMinutes < 60) return '${diff.inMinutes} min fa';
-    if (diff.inHours < 24) return '${diff.inHours} ore fa';
-    return '${diff.inDays} giorni fa';
-  }
 }

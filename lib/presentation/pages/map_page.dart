@@ -6,6 +6,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mappa_prezzi_benzina/core/constants/app_constants.dart';
+import 'package:mappa_prezzi_benzina/core/utils/price_level.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/gas_station.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/user_location.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/auth_bloc.dart';
@@ -1060,29 +1061,56 @@ class _MapPageState extends State<MapPage> {
               ),
             ]),
           MarkerLayer(
-            markers: stations.map((station) {
-              final isSelected = state.selectedStation?.id == station.id;
-              final pin = StationPin(
-                brand: station.brand,
-                selected: isSelected,
-                size: isSelected ? 68 : 46,
-              );
-              return Marker(
-                point: LatLng(station.latitude, station.longitude),
-                width: pin.boxSize,
-                height: pin.boxSize,
-                alignment: pin.markerAlignment,
-                child: GestureDetector(
-                  // Click marker → evidenzia nella lista, NON apre dettaglio
-                  onTap: () => _onMarkerTap(station),
-                  child: pin,
-                ),
-              );
-            }).toList(),
+            markers: _buildStationMarkers(state, stations),
           ),
         ],
       ),
     );
+  }
+
+  /// Colora ogni pin in base al prezzo (del carburante filtrato) rispetto
+  /// alla media della zona attualmente visibile: verde = più conveniente,
+  /// giallo = in linea, rosso = più caro.
+  List<Marker> _buildStationMarkers(MapLoaded state, List<GasStation> stations) {
+    final effectiveTypes = _expandFuelTypes(_selectedFuelTypes);
+    final areaAverage = averageOfFinite(
+        stations.map((s) => _relevantPrice(s, effectiveTypes)));
+
+    return stations.map((station) {
+      final isSelected = state.selectedStation?.id == station.id;
+      final priceLevel = classifyPriceLevel(
+          _relevantPrice(station, effectiveTypes), areaAverage);
+      final pin = StationPin(
+        brand: station.brand,
+        selected: isSelected,
+        size: isSelected ? 68 : 46,
+        priceColor: _priceLevelColor(priceLevel),
+      );
+      return Marker(
+        point: LatLng(station.latitude, station.longitude),
+        width: pin.boxSize,
+        height: pin.boxSize,
+        alignment: pin.markerAlignment,
+        child: GestureDetector(
+          // Click marker → evidenzia nella lista, NON apre dettaglio
+          onTap: () => _onMarkerTap(station),
+          child: pin,
+        ),
+      );
+    }).toList();
+  }
+
+  Color? _priceLevelColor(PriceLevel? level) {
+    switch (level) {
+      case PriceLevel.cheap:
+        return AppTheme.secondaryColor;
+      case PriceLevel.expensive:
+        return AppTheme.errorColor;
+      case PriceLevel.average:
+        return AppTheme.accentColor;
+      case null:
+        return null;
+    }
   }
 
   // ─── Mobile bottom list ────────────────────────────────────────────────────

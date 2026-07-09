@@ -6,6 +6,7 @@ import 'package:mappa_prezzi_benzina/domain/entities/user_location.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/auth_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/bloc/favorites_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
+import 'package:mappa_prezzi_benzina/presentation/widgets/updated_at_label.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 Color _fuelColor(String fuelType) {
@@ -227,13 +228,7 @@ class StationCard extends StatelessWidget {
               // ── Aggiornamento ──────────────────────────────────────────
               if (station.lastUpdated != null) ...[
                 const SizedBox(height: 8),
-                Text(
-                  'Aggiornato ${_timeAgo(station.lastUpdated!)}',
-                  style: GoogleFonts.poppins(
-                    fontSize: 11,
-                    color: AppTheme.textSecondaryColor,
-                  ),
-                ),
+                UpdatedAtLabel(lastUpdated: station.lastUpdated!),
               ],
             ],
           ),
@@ -290,12 +285,5 @@ class StationCard extends StatelessWidget {
             station: station,
           ));
     }
-  }
-
-  String _timeAgo(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 60) return '${diff.inMinutes} min fa';
-    if (diff.inHours < 24) return '${diff.inHours} ore fa';
-    return '${diff.inDays} giorni fa';
   }
 }

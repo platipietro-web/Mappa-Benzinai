@@ -4,6 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:mappa_prezzi_benzina/core/constants/app_constants.dart';
+import 'package:mappa_prezzi_benzina/core/utils/price_level.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/gas_station.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/saved_station.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/user_location.dart';
@@ -360,28 +361,62 @@ class _FavoritesPageState extends State<FavoritesPage> {
               ),
             ]),
           MarkerLayer(
-            markers: stations.map((station) {
-              final isSelected = _selectedStation?.id == station.id;
-              final pin = StationPin(
-                brand: station.brand,
-                selected: isSelected,
-                size: isSelected ? 68 : 46,
-              );
-              return Marker(
-                point: LatLng(station.latitude, station.longitude),
-                width: pin.boxSize,
-                height: pin.boxSize,
-                alignment: pin.markerAlignment,
-                child: GestureDetector(
-                  onTap: () => _onMarkerTap(station, stations),
-                  child: pin,
-                ),
-              );
-            }).toList(),
+            markers: _buildStationMarkers(stations),
           ),
         ],
       ),
     );
+  }
+
+  /// Prezzo rappresentativo di una stazione: media di tutti i carburanti
+  /// disponibili (qui non c'è un filtro per tipo come nella mappa
+  /// principale).
+  double _representativePrice(GasStation station) {
+    if (station.prices.isEmpty) return double.infinity;
+    final values = station.prices.values;
+    return values.reduce((a, b) => a + b) / values.length;
+  }
+
+  /// Colora ogni pin in base al prezzo rispetto alla media dei soli
+  /// preferiti: verde = più conveniente, giallo = in linea, rosso = più caro.
+  List<Marker> _buildStationMarkers(List<GasStation> stations) {
+    final areaAverage =
+        averageOfFinite(stations.map(_representativePrice));
+
+    return stations.map((station) {
+      final isSelected = _selectedStation?.id == station.id;
+      final priceLevel = classifyPriceLevel(
+          _representativePrice(station), areaAverage);
+      final pin = StationPin(
+        brand: station.brand,
+        selected: isSelected,
+        size: isSelected ? 68 : 46,
+        priceColor: _priceLevelColor(priceLevel),
+      );
+      return Marker(
+        point: LatLng(station.latitude, station.longitude),
+        width: pin.boxSize,
+        height: pin.boxSize,
+        alignment: pin.markerAlignment,
+        child: GestureDetector(
+          onTap: () => _onMarkerTap(station, stations),
+          child: pin,
+        ),
+      );
+    }).toList();
+  }
+
+  Color? _priceLevelColor(PriceLevel? level) {
+    switch (level) {
+      case PriceLevel.cheap:
+        return AppTheme.secondaryColor;
+      case PriceLevel.expensive:
+        return AppTheme.errorColor;
+      case PriceLevel.average:
+        return AppTheme.accentColor;
+      case null:
+        return null;
+    }
   }
 
   // ─── Lista mobile (orizzontale) ────────────────────────────────────────────
