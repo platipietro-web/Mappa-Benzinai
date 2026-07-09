@@ -20,8 +20,38 @@ Color _fuelColor(String fuelType) {
   return const Color(0xFF607D8B);
 }
 
-class VehiclesScreen extends StatelessWidget {
+class VehiclesScreen extends StatefulWidget {
   const VehiclesScreen({Key? key}) : super(key: key);
+
+  @override
+  State<VehiclesScreen> createState() => _VehiclesScreenState();
+}
+
+class _VehiclesScreenState extends State<VehiclesScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Rete di sicurezza: se il caricamento avviato dal listener globale in
+    // main.dart (alla transizione ad Authenticated) fallisce silenziosamente
+    // per un errore di rete/permessi transitorio subito dopo un reload della
+    // pagina, qui riproviamo appena questa scheda viene costruita, evitando
+    // che l'utente resti bloccato con la sezione Auto vuota nonostante il
+    // login sia ancora valido.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final authState = context.read<AuthBloc>().state;
+      if (authState is Authenticated && !authState.isAnonymous) {
+        context.read<VehicleBloc>().add(LoadVehiclesEvent(authState.userId));
+      }
+    });
+  }
+
+  Future<void> _refresh(BuildContext context) async {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is Authenticated && !authState.isAnonymous) {
+      context.read<VehicleBloc>().add(LoadVehiclesEvent(authState.userId));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -58,19 +88,28 @@ class VehiclesScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           if (state.vehicles.isEmpty) {
-            return _EmptyVehicles(
-                onAdd: () => showVehicleFormSheet(context));
+            return RefreshIndicator(
+              onRefresh: () => _refresh(context),
+              child: ListView(
+                children: [
+                  _EmptyVehicles(onAdd: () => showVehicleFormSheet(context)),
+                ],
+              ),
+            );
           }
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: state.vehicles.length,
-            itemBuilder: (ctx, i) {
-              final vehicle = state.vehicles[i];
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _VehicleCard(vehicle: vehicle),
-              );
-            },
+          return RefreshIndicator(
+            onRefresh: () => _refresh(context),
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: state.vehicles.length,
+              itemBuilder: (ctx, i) {
+                final vehicle = state.vehicles[i];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _VehicleCard(vehicle: vehicle),
+                );
+              },
+            ),
           );
         },
       ),
@@ -290,11 +329,46 @@ class _VehicleCard extends StatelessWidget {
               onPressed: () =>
                   showRefuelingSheet(context, initialVehicle: vehicle),
             ),
+            IconButton(
+              icon: Icon(Icons.delete_outline,
+                  color: AppTheme.errorColor.withOpacity(0.7)),
+              tooltip: 'Elimina auto',
+              onPressed: () => _confirmDeleteVehicle(context, vehicle),
+            ),
           ],
         ),
       ),
     );
   }
+}
+
+void _confirmDeleteVehicle(BuildContext context, Vehicle vehicle) {
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text('Elimina auto',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+      content: Text(
+        'Vuoi eliminare "${vehicle.name}"? Rifornimenti e spese collegati '
+        'non verranno eliminati dallo storico generale.',
+        style: GoogleFonts.poppins(fontSize: 14),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Annulla'),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: AppTheme.errorColor),
+          onPressed: () {
+            Navigator.pop(ctx);
+            context.read<VehicleBloc>().add(DeleteVehicleEvent(vehicle));
+          },
+          child: const Text('Elimina'),
+        ),
+      ],
+    ),
+  );
 }
 
 // ─── Add / edit vehicle form ────────────────────────────────────────────────

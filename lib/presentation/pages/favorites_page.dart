@@ -13,6 +13,7 @@ import 'package:mappa_prezzi_benzina/presentation/bloc/location_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
 import 'package:mappa_prezzi_benzina/presentation/widgets/current_location_marker.dart';
 import 'package:mappa_prezzi_benzina/presentation/widgets/station_card.dart';
+import 'package:mappa_prezzi_benzina/presentation/widgets/station_pin.dart';
 
 const _kDesktopBreakpoint = 768.0;
 const _kCardSpacing = 10.0;
@@ -309,6 +310,18 @@ class _FavoritesPageState extends State<FavoritesPage> {
   // ─── Mappa ─────────────────────────────────────────────────────────────────
 
   Widget _buildMap(List<GasStation> stations, UserLocation? userLocation) {
+    // Con almeno un preferito, la camera si posiziona/adatta per contenere
+    // tutte le stazioni salvate (non solo la prima), così si "arriva" già
+    // sui benzinai preferiti invece che sulla posizione dell'utente.
+    final cameraFit = stations.isNotEmpty
+        ? CameraFit.coordinates(
+            coordinates: stations
+                .map((s) => LatLng(s.latitude, s.longitude))
+                .toList(),
+            padding: const EdgeInsets.all(60),
+            maxZoom: 15,
+          )
+        : null;
     final initialCenter = stations.isNotEmpty
         ? LatLng(stations.first.latitude, stations.first.longitude)
         : userLocation != null
@@ -322,6 +335,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
         options: MapOptions(
           initialCenter: initialCenter,
           initialZoom: stations.isNotEmpty ? 12 : AppConstants.defaultZoom,
+          initialCameraFit: cameraFit,
           maxZoom: 18,
           minZoom: 5,
         ),
@@ -348,41 +362,19 @@ class _FavoritesPageState extends State<FavoritesPage> {
           MarkerLayer(
             markers: stations.map((station) {
               final isSelected = _selectedStation?.id == station.id;
+              final pin = StationPin(
+                brand: station.brand,
+                selected: isSelected,
+                size: isSelected ? 68 : 46,
+              );
               return Marker(
                 point: LatLng(station.latitude, station.longitude),
-                width: isSelected ? 48 : 40,
-                height: isSelected ? 48 : 40,
+                width: pin.boxSize,
+                height: pin.boxSize,
+                alignment: pin.markerAlignment,
                 child: GestureDetector(
                   onTap: () => _onMarkerTap(station, stations),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? AppTheme.accentColor
-                          : Colors.red.shade400,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.white,
-                        width: isSelected ? 3 : 2,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color:
-                              (isSelected ? AppTheme.accentColor : Colors.red)
-                                  .withOpacity(0.5),
-                          blurRadius: isSelected ? 14 : 6,
-                          spreadRadius: isSelected ? 3 : 1,
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      isSelected
-                          ? Icons.local_gas_station
-                          : Icons.favorite_rounded,
-                      color: Colors.white,
-                      size: isSelected ? 22 : 17,
-                    ),
-                  ),
+                  child: pin,
                 ),
               );
             }).toList(),

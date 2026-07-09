@@ -26,6 +26,8 @@ class AnalyticsRepositoryImpl implements AnalyticsRepository {
         savedVsArea: log.savedVsArea,
         areaAvgPrice: log.areaAvgPrice,
         timestamp: log.timestamp,
+        vehicleId: log.vehicleId,
+        odometerKm: log.odometerKm,
       );
       await _firestoreService.addRefuelingLog(model);
     } catch (e) {

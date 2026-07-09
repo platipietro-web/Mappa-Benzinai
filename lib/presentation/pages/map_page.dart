@@ -1065,7 +1065,7 @@ class _MapPageState extends State<MapPage> {
               final pin = StationPin(
                 brand: station.brand,
                 selected: isSelected,
-                size: isSelected ? 54 : 36,
+                size: isSelected ? 68 : 46,
               );
               return Marker(
                 point: LatLng(station.latitude, station.longitude),

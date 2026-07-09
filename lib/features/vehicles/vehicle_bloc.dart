@@ -117,7 +117,14 @@ class VehicleState extends Equatable {
 
   Vehicle? get defaultVehicle {
     if (vehicles.isEmpty) return null;
-    return vehicles.firstWhere((v) => v.isDefault, orElse: () => vehicles.first);
+    // Niente firstWhere(orElse:): vehicles è dichiarata List<Vehicle> ma a
+    // runtime contiene sempre VehicleModel, quindi la closure passata a
+    // orElse verrebbe tipizzata "Vehicle Function()" invece di "VehicleModel
+    // Function()" e Dart la rifiuterebbe con un TypeError a runtime.
+    for (final v in vehicles) {
+      if (v.isDefault) return v;
+    }
+    return vehicles.first;
   }
 
   Vehicle? vehicleById(String id) {

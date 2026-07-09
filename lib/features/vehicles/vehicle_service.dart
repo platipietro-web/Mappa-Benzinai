@@ -110,9 +110,12 @@ class VehicleServiceImpl implements VehicleService {
 
   @override
   Future<void> updateVehicle(VehicleModel vehicle) async {
+    // set (non update): toFirestore() omette i campi opzionali nulli, con
+    // update() un campo svuotato (es. targa rimossa) resterebbe nel
+    // documento con il vecchio valore invece di sparire.
     await _vehiclesCol(vehicle.userId)
         .doc(vehicle.id)
-        .update(vehicle.toFirestore());
+        .set(vehicle.toFirestore());
   }
 
   @override
@@ -163,9 +166,10 @@ class VehicleServiceImpl implements VehicleService {
 
   @override
   Future<void> updateCostEntry(VehicleCostEntryModel entry) async {
+    // set (non update): stesso motivo di updateVehicle sopra.
     await _costEntriesCol(entry.userId, entry.vehicleId)
         .doc(entry.id)
-        .update(entry.toFirestore());
+        .set(entry.toFirestore());
   }
 
   @override
