@@ -13,7 +13,7 @@ abstract class GasStationRepository {
     double radiusKm,
   );
   Future<GasStation?> getStationDetails(String stationId);
-  Future<void> submitPriceUpdate(PriceUpdate update);
+  Future<void> submitPriceUpdate(PriceUpdate update, {required String stationName});
   Future<List<PriceUpdate>> getPriceHistory(String stationId);
   Future<void> addToFavorites(String userId, GasStation station);
   Future<void> removeFromFavorites(String userId, String stationId);

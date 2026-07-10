@@ -18,7 +18,8 @@ abstract class FirestoreService {
     double radiusKm,
   );
   Future<GasStationModel?> getStationById(String stationId);
-  Future<void> addPriceUpdate(PriceUpdateModel update);
+  Future<void> addPriceUpdate(PriceUpdateModel update,
+      {required String stationName});
   Future<List<PriceUpdateModel>> getPriceUpdatesForStation(String stationId);
   Future<void> createUserProfile(String userId, String email, {String? displayName});
   Future<void> addFavorite(
@@ -109,7 +110,8 @@ class FirestoreServiceImpl implements FirestoreService {
   }
 
   @override
-  Future<void> addPriceUpdate(PriceUpdateModel update) async {
+  Future<void> addPriceUpdate(PriceUpdateModel update,
+      {required String stationName}) async {
     try {
       final batch = _firestore.batch();
 
@@ -120,13 +122,28 @@ class FirestoreServiceImpl implements FirestoreService {
           .doc();
       batch.set(updateRef, update.toFirestore());
 
+      // Le stazioni vengono dal CSV MIMIT, non esistono come documento in
+      // Firestore finché nessuno segnala un prezzo: usare set(merge:true)
+      // invece di update() crea il documento se manca, senza fallire con
+      // "No document to update". 'name' è richiesto dalla regola di
+      // sicurezza per la create.
       final stationRef = _firestore
           .collection(AppConstants.stationsCollection)
           .doc(update.stationId);
-      batch.update(stationRef, {
-        'prices.${update.fuelType}': update.price,
-        'lastUpdated': FieldValue.serverTimestamp(),
-      });
+      // Mappa annidata, non chiave puntata: con set(merge:true) — a
+      // differenza di update() — i punti in una chiave stringa NON vengono
+      // interpretati come field path, verrebbero presi alla lettera come
+      // nome di campo. Una mappa annidata invece viene unita in modo
+      // ricorsivo, quindi non cancella gli altri carburanti già presenti.
+      batch.set(
+        stationRef,
+        {
+          'name': stationName,
+          'prices': {update.fuelType: update.price},
+          'lastUpdated': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
 
       await batch.commit();
     } catch (e) {

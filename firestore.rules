@@ -54,6 +54,20 @@ service cloud.firestore {
       }
     }
 
+    // ── Celle import OSM (cooldown condiviso, evita chiamate Overpass ripetute)
+    match /import_cells/{cellId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // ── Log errori servizi esterni senza dashboard (Nominatim/Overpass) ────
+    // Nessuna lettura client: consultati solo dalla console Firebase.
+    match /service_errors/{errorId} {
+      allow read: if false;
+      allow create: if isValidString(request.resource.data.serviceName, 50);
+      allow update, delete: if false;
+    }
+
     // ── Autolavaggi (lettura pubblica, scrittura autenticati + validazione) ──
     match /car_washes/{washId} {
       allow read: if true;

@@ -61,7 +61,27 @@ class CarWashServiceImpl implements CarWashService {
 
   @override
   Future<List<CarWashModel>> importFromOsm(double lat, double lon, double radiusKm) async {
+    // Cella di ~0.25° (≈ 20-28km in Italia): raggruppa le richieste di import
+    // per zona così che utenti diversi che aprono la stessa area non
+    // richiamino Overpass ripetutamente — condiviso su Firestore, non solo
+    // per-dispositivo, perché il problema è il traffico aggregato su un
+    // servizio pubblico gratuito con fair-use policy.
+    final cellId = _importCellId(lat, lon);
+    final cellRef =
+        _firestore.collection(AppConstants.importCellsCollection).doc(cellId);
+
+    final cellDoc = await cellRef.get();
+    final lastImported = cellDoc.data()?['lastImportedAt'] as Timestamp?;
+    if (lastImported != null &&
+        DateTime.now().difference(lastImported.toDate()) <
+            AppConstants.carWashImportCooldown) {
+      return [];
+    }
+
     final washes = await _importer.fetchCarWashes(lat, lon, radiusKm);
+
+    await cellRef.set({'lastImportedAt': FieldValue.serverTimestamp()});
+
     if (washes.isEmpty) return [];
 
     // Firestore batch limit is 500 — split if needed.
@@ -79,5 +99,11 @@ class CarWashServiceImpl implements CarWashService {
     }
 
     return washes;
+  }
+
+  String _importCellId(double lat, double lon) {
+    final latCell = (lat * 4).round();
+    final lonCell = (lon * 4).round();
+    return '${latCell}_$lonCell';
   }
 }

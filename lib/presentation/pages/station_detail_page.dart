@@ -371,26 +371,34 @@ class _StationDetailPageState extends State<StationDetailPage> {
                         price: newPrice,
                         timestamp: DateTime.now(),
                       );
-                      getIt<GasStationRepository>()
-                          .submitPriceUpdate(update)
-                          .then((_) {
-                        if (context.mounted) {
-                          context.read<MapBloc>().add(
-                                UpdateStationPricesEvent(
-                                  stationId: station.id,
-                                  fuelType: selectedFuel,
-                                  price: newPrice,
-                                ),
-                              );
-                        }
-                      });
+                      final submission = getIt<GasStationRepository>()
+                          .submitPriceUpdate(update, stationName: station.name);
                       Navigator.pop(sheetCtx);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: const Text('Segnalazione inviata, grazie!'),
-                          backgroundColor: AppTheme.secondaryColor,
-                        ),
-                      );
+                      submission.then((_) {
+                        if (!context.mounted) return;
+                        context.read<MapBloc>().add(
+                              UpdateStationPricesEvent(
+                                stationId: station.id,
+                                fuelType: selectedFuel,
+                                price: newPrice,
+                              ),
+                            );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text('Prezzo aggiornato, grazie!'),
+                            backgroundColor: AppTheme.secondaryColor,
+                          ),
+                        );
+                      }).catchError((_) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text(
+                                'Invio non riuscito, riprova più tardi'),
+                            backgroundColor: AppTheme.errorColor,
+                          ),
+                        );
+                      });
                     },
                     child: const Text('Invia segnalazione'),
                   ),

@@ -48,13 +48,14 @@ class CarWashMap extends StatelessWidget {
         ),
         children: [
           TileLayer(
-            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            urlTemplate: AppConstants.tileUrlTemplate,
+            subdomains: AppConstants.tileSubdomains,
             evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
             userAgentPackageName: 'it.mappabenzinai.app',
           ),
           RichAttributionWidget(
             attributions: [
-              TextSourceAttribution('© OpenStreetMap contributors'),
+              TextSourceAttribution(AppConstants.tileAttribution),
             ],
           ),
           if (userLocation != null)

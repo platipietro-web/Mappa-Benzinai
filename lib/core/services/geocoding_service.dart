@@ -1,4 +1,6 @@
 import 'package:dio/dio.dart';
+import 'package:mappa_prezzi_benzina/core/constants/app_constants.dart';
+import 'package:mappa_prezzi_benzina/core/services/service_error_logger.dart';
 
 class GeocodingResult {
   final String name;
@@ -17,7 +19,8 @@ class GeocodingResult {
 class GeocodingService {
   static final _dio = Dio()
     ..options.connectTimeout = const Duration(seconds: 10)
-    ..options.receiveTimeout = const Duration(seconds: 10);
+    ..options.receiveTimeout = const Duration(seconds: 10)
+    ..options.headers = {'User-Agent': AppConstants.osmUserAgent};
 
   static Future<List<GeocodingResult>> search(String query) async {
     final q = query.trim();
@@ -70,6 +73,10 @@ class GeocodingService {
           lon: lon,
         );
       }).whereType<GeocodingResult>().toList();
+    } on DioException catch (e) {
+      ServiceErrorLogger.log('nominatim',
+          detail: e.response?.statusCode?.toString() ?? e.type.name);
+      return const [];
     } catch (_) {
       return const [];
     }

@@ -54,7 +54,8 @@ class GasStationRepositoryImpl implements GasStationRepository {
   }
 
   @override
-  Future<void> submitPriceUpdate(PriceUpdate update) async {
+  Future<void> submitPriceUpdate(PriceUpdate update,
+      {required String stationName}) async {
     try {
       final model = PriceUpdateModel(
         id: update.id,
@@ -66,7 +67,7 @@ class GasStationRepositoryImpl implements GasStationRepository {
         likes: update.likes,
         isFlagged: update.isFlagged,
       );
-      await _firestoreService.addPriceUpdate(model);
+      await _firestoreService.addPriceUpdate(model, stationName: stationName);
     } catch (e) {
       logError('Error in submitPriceUpdate repository', e);
       rethrow;

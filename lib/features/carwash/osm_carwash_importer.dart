@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:mappa_prezzi_benzina/core/constants/app_constants.dart';
 import 'package:mappa_prezzi_benzina/features/carwash/carwash_model.dart';
 
 /// Fetches car wash locations from the OpenStreetMap Overpass API
@@ -36,6 +37,7 @@ out center tags;
         responseType: ResponseType.json,
         sendTimeout: const Duration(seconds: 60),
         receiveTimeout: const Duration(seconds: 60),
+        headers: {'User-Agent': AppConstants.osmUserAgent},
       ),
     );
 

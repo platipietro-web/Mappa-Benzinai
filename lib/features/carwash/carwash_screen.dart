@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -10,6 +11,7 @@ import 'package:latlong2/latlong.dart';
 
 import 'package:mappa_prezzi_benzina/core/constants/app_constants.dart';
 import 'package:mappa_prezzi_benzina/core/services/geocoding_service.dart';
+import 'package:mappa_prezzi_benzina/core/services/service_error_logger.dart';
 import 'package:mappa_prezzi_benzina/core/services/service_locator.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/car_wash.dart';
 import 'package:mappa_prezzi_benzina/domain/entities/user_location.dart';
@@ -159,6 +161,11 @@ class _CarWashScreenState extends State<CarWashScreen> {
       if (washes.isNotEmpty) {
         context.read<CarWashBloc>().add(AddMultipleCarWashesEvent(washes));
       }
+    } on DioException catch (e) {
+      // Silent per l'utente — non disturbarlo se OSM è temporaneamente
+      // non disponibile — ma logga per accorgerci se inizia a bloccarci.
+      ServiceErrorLogger.log('overpass',
+          detail: e.response?.statusCode?.toString() ?? e.type.name);
     } catch (_) {
       // Silent — don't bother the user if OSM is temporarily unavailable
     } finally {
