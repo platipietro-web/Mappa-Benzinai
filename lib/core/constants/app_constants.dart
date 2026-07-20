@@ -36,6 +36,35 @@ class AppConstants {
   static const double defaultZoom = 6.0;
   static const double stationSearchRadius = 10.0; // km
 
+  // ─── Percorso (routing OSRM) ────────────────────────────────────────────────
+  // Server demo pubblico OSRM: gratuito, senza API key, stesso approccio
+  // "free OSM ecosystem" già usato per Nominatim/CARTO. È un servizio
+  // "fair use" della community, senza SLA — adeguato ai volumi di quest'app.
+  static const String osrmBaseUrl = 'https://router.project-osrm.org';
+  // Larghezza del corridoio attorno al percorso entro cui un distributore
+  // è considerato "sulla via".
+  static const double routeCorridorKm = 3.0;
+  // Distanza minima tra i centri delle query getNearbyStations lungo il
+  // percorso (adattata al rialzo per tratte lunghe, vedi RoutePlannerBloc).
+  static const double routeSampleIntervalKm = 15.0;
+  // Raggio di fetch per ogni centro campionato: abbastanza largo da coprire
+  // senza buchi la fascia tra due centri consecutivi + il corridoio.
+  static const double routeSearchFetchRadiusKm = 10.0;
+  static const int routeMaxSuggestions = 30;
+  // Limite di alternative stradali mostrate, anche se OSRM ne restituisse
+  // di più.
+  static const int routeMaxAlternatives = 3;
+
+  // ─── Brand distributori ─────────────────────────────────────────────────────
+  // Lista condivisa tra FilterBottomSheet (mappa) e il filtro brand della
+  // sezione Percorso.
+  static const List<String> gasStationBrands = [
+    'Agip', 'Eni', 'IP', 'Esso', 'Shell', 'Q8',
+    'Tamoil', 'Total', 'TotalEnergies', 'Cepsa',
+    'Lukoil', 'Pam', 'Conad', 'Retitalia',
+    'Distributore', 'Pompe Bianche',
+  ];
+
   // ─── Firestore collections ─────────────────────────────────────────────────
   static const String stationsCollection = 'gas_stations';
   static const String priceUpdatesCollection = 'price_updates';

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:mappa_prezzi_benzina/core/constants/app_constants.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
 
 class FilterBottomSheet extends StatefulWidget {
@@ -47,13 +48,6 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
     _FuelChip('GNC',              Color(0xFF7B1FA2), Icons.air),
     _FuelChip('GNL',              Color(0xFF4A148C), Icons.air),
     _FuelChip('Idrogeno',         Color(0xFF00BCD4), Icons.bolt),
-  ];
-
-  static const List<String> _availableBrands = [
-    'Agip', 'Eni', 'IP', 'Esso', 'Shell', 'Q8',
-    'Tamoil', 'Total', 'TotalEnergies', 'Cepsa',
-    'Lukoil', 'Pam', 'Conad', 'Retitalia',
-    'Distributore', 'Pompe Bianche',
   ];
 
   @override
@@ -170,7 +164,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: _availableBrands.map((brand) {
+                children: AppConstants.gasStationBrands.map((brand) {
                   final isSelected = _selectedBrands.contains(brand);
                   return FilterChip(
                     label: Text(brand),

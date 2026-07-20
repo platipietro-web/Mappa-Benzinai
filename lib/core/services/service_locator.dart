@@ -42,6 +42,9 @@ import 'package:mappa_prezzi_benzina/features/vehicles/vehicle_repository.dart';
 import 'package:mappa_prezzi_benzina/features/vehicles/vehicle_repository_impl.dart';
 import 'package:mappa_prezzi_benzina/features/vehicles/vehicle_service.dart';
 
+// Route planner feature
+import 'package:mappa_prezzi_benzina/features/route_planner/route_planner_bloc.dart';
+
 final getIt = GetIt.instance;
 
 void setupServiceLocator() {
@@ -113,4 +116,8 @@ void setupServiceLocator() {
       VehicleRepositoryImpl(getIt<VehicleService>()));
   getIt.registerSingleton<VehicleBloc>(
       VehicleBloc(getIt<VehicleRepository>(), getIt<AnalyticsRepository>()));
+
+  // Route planner feature
+  getIt.registerSingleton<RoutePlannerBloc>(
+      RoutePlannerBloc(getIt<GasStationRepository>()));
 }

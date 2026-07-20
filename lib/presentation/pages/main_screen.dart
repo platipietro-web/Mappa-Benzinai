@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:mappa_prezzi_benzina/core/services/service_locator.dart';
 import 'package:mappa_prezzi_benzina/features/carwash/carwash_screen.dart';
+import 'package:mappa_prezzi_benzina/features/route_planner/route_planner_screen.dart';
 import 'package:mappa_prezzi_benzina/features/vehicles/vehicles_screen.dart';
 import 'package:mappa_prezzi_benzina/presentation/pages/favorites_page.dart';
 import 'package:mappa_prezzi_benzina/presentation/pages/map_page.dart';
 import 'package:mappa_prezzi_benzina/presentation/theme/app_theme.dart';
 
-// Sempre 4 tab fissi: 0=Carburante, 1=Preferiti, 2=Autolavaggio, 3=Auto.
-// FavoritesPage gestisce internamente il caso utente non loggato.
+// Sempre 5 tab fissi: 0=Carburante, 1=Preferiti, 2=Autolavaggio, 3=Auto,
+// 4=Percorso. FavoritesPage gestisce internamente il caso utente non loggato.
 const int vehiclesTabIndex = 3;
 
 class MainScreen extends StatefulWidget {
@@ -26,6 +27,7 @@ class _MainScreenState extends State<MainScreen> {
     FavoritesPage(),
     CarWashScreen(),
     VehiclesScreen(),
+    RoutePlannerScreen(),
   ];
 
   @override
@@ -83,6 +85,12 @@ class _MainScreenState extends State<MainScreen> {
             selectedIcon: Icon(Icons.directions_car_filled,
                 color: AppTheme.primaryColor),
             label: 'Auto',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.alt_route_outlined),
+            selectedIcon:
+                Icon(Icons.alt_route_rounded, color: AppTheme.primaryColor),
+            label: 'Percorso',
           ),
         ],
       ),

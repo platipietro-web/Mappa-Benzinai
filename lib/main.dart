@@ -22,6 +22,7 @@ import 'package:mappa_prezzi_benzina/presentation/pages/profile_page.dart';
 import 'package:mappa_prezzi_benzina/features/carwash/carwash_bloc.dart';
 import 'package:mappa_prezzi_benzina/features/carwash/carwash_favorites_bloc.dart';
 import 'package:mappa_prezzi_benzina/features/vehicles/vehicle_bloc.dart';
+import 'package:mappa_prezzi_benzina/features/route_planner/route_planner_bloc.dart';
 import 'package:mappa_prezzi_benzina/presentation/pages/legal_page.dart';
 
 void main() async {
@@ -59,6 +60,8 @@ class MyApp extends StatelessWidget {
         BlocProvider<CarWashFavoritesBloc>(
             create: (_) => getIt<CarWashFavoritesBloc>()),
         BlocProvider<VehicleBloc>(create: (_) => getIt<VehicleBloc>()),
+        BlocProvider<RoutePlannerBloc>(
+            create: (_) => getIt<RoutePlannerBloc>()),
       ],
       child: MaterialApp(
         title: 'Prezzi Benzina',
